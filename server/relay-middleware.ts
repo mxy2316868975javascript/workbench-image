@@ -102,15 +102,19 @@ function createRelayHandler(target: string) {
   }
 }
 
-export function llmRelayPlugin(target = process.env.RELAY_TARGET || DEFAULT_RELAY_TARGET): Plugin {
+export function llmRelayPlugin(
+  target = process.env.RELAY_TARGET || DEFAULT_RELAY_TARGET,
+  prefix = RELAY_PREFIX,
+): Plugin {
+  const mount = prefix.startsWith('/') ? prefix.replace(/\/+$/, '') : `/${prefix}`
   const handler = createRelayHandler(target)
   return {
-    name: 'llm-api-h2-relay',
+    name: mount === RELAY_PREFIX ? 'llm-api-h2-relay' : `llm-api-h2-relay:${mount}`,
     configureServer(server) {
-      server.middlewares.use(RELAY_PREFIX, handler)
+      server.middlewares.use(mount, handler)
     },
     configurePreviewServer(server) {
-      server.middlewares.use(RELAY_PREFIX, handler)
+      server.middlewares.use(mount, handler)
     },
   }
 }

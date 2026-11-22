@@ -36,7 +36,8 @@ Open `?demo=1` for a read-only demo with sample images; it never calls a real en
 
 - `VITE_DEFAULT_BASE_URL`, `VITE_DEFAULT_MODEL`, `VITE_TEXT_BASE_URL`, `VITE_TEXT_MODEL`: defaults for the generation and manga text endpoints.
 - `VITE_DEFAULT_API_KEY`, `VITE_TEXT_API_KEY`: **development only**. `VITE_*` values are inlined into the frontend bundle, so production builds fail if a secret-like `VITE_*` is non-empty. Put real keys in the in-app Settings panel instead.
-- `RELAY_TARGET`: upstream for the local HTTP/2 relay used by dev/preview. The relay only accepts loopback requests and never stores data.
+- `RELAY_TARGET`: upstream for the local HTTP/2 image relay used by dev/preview. The relay only accepts loopback requests and never stores data.
+- `RELAY_TARGET_TEXT`: optional second upstream for the text relay (`/api/relay-text`). Use it when the image and manga text endpoints are different; both upstreams must support HTTP/2.
 
 ## Data & privacy
 
