@@ -120,13 +120,25 @@ npm run preview    # 本地预览 dist
 | `VITE_TEXT_BASE_URL` | 文本端点（漫画脚本 / 分镜） | `/api/relay/v1` |
 | `VITE_TEXT_API_KEY` | 文本密钥（仅 dev 生效） | 空 |
 | `VITE_TEXT_MODEL` | 文本模型 | `gpt-4o-mini` |
-| `RELAY_TARGET` | 内置 relay 的上游地址（仅 dev / preview） | `https://api.openai.com` |
+| `RELAY_TARGET` | 图片 relay 的上游地址（仅 dev / preview） | `https://api.openai.com` |
+| `RELAY_TARGET_TEXT` | 文本 relay 的上游地址；文本 Base URL 配 `/api/relay-text/v1` 时使用 | 空 |
 
 **密钥安全**：`VITE_*` 会被 Vite 打包进前端产物，等同于公开信息。生产构建检测到名称像密钥的 `VITE_*` 非空会直接失败；真实 Key 请在应用「设置」面板填写，只存 IndexedDB。开发环境可以用 `.env.local`，但不要提交。
 
 ### 内置 relay
 
 部分上游不返回 CORS 头，浏览器无法直连。`server/relay-middleware.ts` 在 dev/preview 进程内用 `node:http2` 直连上游并逐字节 pipe，只转发、不存储。relay 只接受本机回环请求（`127.0.0.1` / `::1`），并校验 Host / Origin；不要用 `--host 0.0.0.0` 把 preview 暴露到局域网或公网。
+
+图片和文本是两个不同上游时，用两个 relay 前缀：
+
+```bash
+VITE_DEFAULT_BASE_URL=/api/relay/v1
+VITE_TEXT_BASE_URL=/api/relay-text/v1
+RELAY_TARGET=https://图片端点
+RELAY_TARGET_TEXT=https://文本端点
+```
+
+`RELAY_TARGET` / `RELAY_TARGET_TEXT` 只写 origin，不要带 `/v1`；relay 会保留前端请求里的 `/v1/...` 路径。两个上游都需要支持 HTTP/2；只支持 HTTP/1.1 的本地服务请改用直连 + CORS，或自建网关。
 
 生产静态部署没有 relay，需要把设置里的 Base URL 换成支持 CORS 的端点，或自行托管带访问控制的转发层。
 
