@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { AlertTriangle, Eye, EyeOff, PlugZap, Trash2 } from 'lucide-react'
 import { store, useStore } from '../store/store'
 import { FALLBACK_SETTINGS } from '../lib/db'
+import { fetchModels } from '../lib/connection'
 import {
   BACKGROUND_OPTIONS,
   FORMAT_OPTIONS,
@@ -19,6 +20,7 @@ export function SettingsDialog() {
   const [draft, setDraft] = useState<Settings>(settings)
   const [showKey, setShowKey] = useState(false)
   const [test, setTest] = useState<TestState>({ status: 'idle' })
+  const [modelOptions, setModelOptions] = useState<string[]>([])
   const [clearOpen, setClearOpen] = useState(false)
   const [confirmText, setConfirmText] = useState('')
   const [clearing, setClearing] = useState(false)
@@ -28,6 +30,7 @@ export function SettingsDialog() {
     if (settingsOpen) {
       setDraft(settings)
       setTest({ status: 'idle' })
+      setModelOptions([])
     }
   }, [settingsOpen, settings])
 
@@ -37,19 +40,22 @@ export function SettingsDialog() {
 
   const testConnection = async () => {
     setTest({ status: 'testing' })
-    try {
-      const base = draft.baseUrl.replace(/\/+$/, '')
-      const res = await fetch(`${base}/models`, {
-        headers: draft.apiKey ? { Authorization: `Bearer ${draft.apiKey}` } : undefined,
+    const probe = await fetchModels(draft.baseUrl, draft.apiKey)
+    if (probe.status === 'ok') {
+      setModelOptions(probe.models)
+      setTest({
+        status: 'ok',
+        message: probe.models.length ? `连接正常，可用模型：${probe.models.join('、')}` : '连接正常',
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = await res.json()
-      const ids: string[] = (json?.data ?? []).map((m: any) => m.id).filter(Boolean)
-      setTest({ status: 'ok', message: ids.length ? `连接正常，可用模型：${ids.join('、')}` : '连接正常' })
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      setTest({ status: 'error', message: `连接失败：${msg}` })
+      return
     }
+    if (probe.status === 'unknown') {
+      setModelOptions([])
+      setTest({ status: 'ok', message: '连接正常，端点未提供模型列表，可手动填写模型名' })
+      return
+    }
+    setModelOptions([])
+    setTest({ status: 'error', message: `连接失败：${probe.message ?? '未知错误'}` })
   }
 
   return (
@@ -88,13 +94,19 @@ export function SettingsDialog() {
           </div>
         </Field>
 
-        <Field label="模型">
+        <Field label="模型" hint={modelOptions.length ? '可点选上次连接返回的模型' : undefined}>
           <input
             value={draft.model}
             onChange={(e) => setDraft({ ...draft, model: e.target.value })}
             placeholder="gpt-image-1"
+            list="model-options"
             className="h-9 w-full px-3 text-[13px]"
           />
+          <datalist id="model-options">
+            {modelOptions.map((id) => (
+              <option key={id} value={id} />
+            ))}
+          </datalist>
         </Field>
 
         <div className="grid grid-cols-2 gap-3">

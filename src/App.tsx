@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { Images, Wand2 } from 'lucide-react'
 import { store, useStore } from './store/store'
 import { mangaStore } from './store/mangaStore'
@@ -17,10 +17,19 @@ import { MangaWorkspace } from './components/manga/MangaWorkspace'
 export default function App() {
   const { settingsLoaded, historyOpen, leftOpen, narrowView, tasks, taskOrder, workspace } = useStore()
 
+  const [slowOpen, setSlowOpen] = useState(false)
+
   useEffect(() => {
     void store.init()
     void mangaStore.init()
   }, [])
+
+  // 数据库升级被其他标签页占用时，给出可操作的提示，而不是一直停在加载态
+  useEffect(() => {
+    if (settingsLoaded) return
+    const timer = window.setTimeout(() => setSlowOpen(true), 6000)
+    return () => window.clearTimeout(timer)
+  }, [settingsLoaded])
 
   // 窄屏页签：看板上是否有进行中的任务（角标提示）
   const runningCount = taskOrder.filter((id) => tasks[id]?.status === 'running').length
@@ -28,8 +37,13 @@ export default function App() {
   if (!settingsLoaded) {
     return (
       <ThemeProvider>
-        <div className="flex h-full items-center justify-center bg-bg text-sm text-ink-3">
-          正在打开本地数据库…
+        <div className="flex h-full flex-col items-center justify-center gap-1.5 bg-bg text-sm text-ink-3">
+          <span>正在打开本地数据库…</span>
+          {slowOpen && (
+            <span className="text-xs text-ink-3">
+              如果长时间停在这里，请关闭其他打开本应用的标签页后刷新。
+            </span>
+          )}
         </div>
       </ThemeProvider>
     )
@@ -68,13 +82,20 @@ export default function App() {
           <div className={`h-full min-h-0 w-full flex-col ${workspace === 'manga' ? 'flex' : 'hidden'}`}>
             <MangaWorkspace />
           </div>
-          {/* 生成面板：宽屏常驻左栏，窄屏为「生成」页签页；保持挂载以保留草稿 */}
+          {/* 生成面板：宽屏常驻左栏，窄屏为「生成」页签页；保持挂载以保留草稿。
+              收起时用宽度过渡而不是 display 切换，内层固定宽度防止内容在动画中回流。 */}
           <div
-            className={`min-h-0 h-full w-full flex-col ${workspace === 'image' && narrowView === 'generate' ? 'flex' : 'hidden'} ${
-              workspace === 'image' && leftOpen ? 'lg:flex' : 'lg:hidden'
-            } lg:h-full lg:w-[300px] lg:shrink-0 lg:overflow-hidden xl:w-[320px]`}
+            className={`min-h-0 h-full w-full flex-col transition-[width] duration-300 ease-in-out lg:h-full lg:shrink-0 lg:overflow-hidden ${
+              workspace === 'image' && narrowView === 'generate' ? 'flex' : 'hidden'
+            } ${
+              workspace === 'image'
+                ? `lg:flex ${leftOpen ? 'lg:w-[300px] xl:w-[320px]' : 'lg:w-0'}`
+                : 'lg:hidden'
+            }`}
           >
-            <PromptPanel />
+            <div className="h-full w-full shrink-0 lg:w-[300px] xl:w-[320px]">
+              <PromptPanel />
+            </div>
           </div>
           {/* 任务看板：宽屏常驻中间，窄屏为「看板」页签页；仅生图工作台显示 */}
           <div

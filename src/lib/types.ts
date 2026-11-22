@@ -40,6 +40,7 @@ export interface ImageRecord {
   status: ImageStatus
   progress: number       // 0-100
   phase: string          // 展示用阶段文案
+  model?: string         // 生成时使用的模型快照（用于预估与复现）
   isEdit?: boolean       // 图生图（带参考图）
   blob?: Blob
   thumbBlob?: Blob
@@ -66,6 +67,7 @@ export interface TaskRecord {
   createdAt: number
   finishedAt?: number
   imageIds: string[]
+  model?: string         // 提交时的模型快照，历史复现与耗时预估使用
   refImages?: Blob[]     // 图生图参考图（任务级共享，原图存 IndexedDB）
 }
 
@@ -81,6 +83,50 @@ export interface Settings {
 export interface StorageUsage {
   usage: number
   quota: number
+}
+
+/* ---------------- 输入草稿与提交预检 ---------------- */
+
+/** 左栏生成面板的草稿：文字/参数同步存 localStorage，参考图 Blob 存 IndexedDB */
+export interface ComposerDraft {
+  version: 1
+  prompt: string
+  params: GenParams
+  count: number
+  refImages: Blob[]
+  source?: { templateId?: string; templateName?: string }
+  updatedAt: number
+}
+
+export type ConnectionStatus = 'unknown' | 'checking' | 'ok' | 'fail'
+
+export interface ConnectionState {
+  status: ConnectionStatus
+  checkedAt?: number
+  models?: string[]
+  error?: string
+}
+
+export type PreflightLevel = 'error' | 'warn'
+export type PreflightFixKind = 'settings' | 'set-png' | 'clear-refs' | 'open-storage'
+
+export interface PreflightIssue {
+  id: string
+  level: PreflightLevel
+  message: string
+  fix?: { label: string; kind: PreflightFixKind }
+}
+
+export interface PreflightEstimate {
+  minSec: number
+  maxSec: number
+  label: string
+}
+
+export interface PreflightResult {
+  ok: boolean
+  issues: PreflightIssue[]
+  estimate: PreflightEstimate
 }
 
 /* ---------------- 提示词模板 ---------------- */

@@ -1,7 +1,7 @@
 /** 通用 UI 原语 */
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Check, ChevronDown } from 'lucide-react'
+import { ArrowLeft, Check, ChevronDown, X } from 'lucide-react'
 import type { ButtonHTMLAttributes, ReactNode } from 'react'
 
 type BtnVariant = 'primary' | 'default' | 'ghost' | 'danger' | 'subtle'
@@ -276,28 +276,77 @@ export function ProgressBar({ value, tone = 'accent' }: { value: number; tone?: 
   )
 }
 
+/** 模态栈：只让最上层的 Modal 响应 Esc，避免嵌套弹窗一起关闭 */
+const modalStack: symbol[] = []
+
 export function Modal({
   open,
   onClose,
   title,
   children,
   width = 'max-w-lg',
+  onBack,
 }: {
   open: boolean
   onClose: () => void
   title: ReactNode
   children: ReactNode
   width?: string
+  /** 二级页面（如模板库）返回上一级；不传则不显示返回箭头 */
+  onBack?: () => void
 }) {
+  const idRef = useRef(Symbol('modal'))
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
+  useEffect(() => {
+    if (!open) return
+    const id = idRef.current
+    modalStack.push(id)
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || modalStack[modalStack.length - 1] !== id) return
+      e.preventDefault()
+      onCloseRef.current()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      const i = modalStack.lastIndexOf(id)
+      if (i >= 0) modalStack.splice(i, 1)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [open])
+
   if (!open) return null
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onMouseDown={onClose}>
       <div
+        role="dialog"
+        aria-modal="true"
         className={`w-full ${width} rounded-2xl border border-line bg-panel shadow-[var(--shadow)]`}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
-          <h2 className="text-[15px] font-semibold text-ink">{title}</h2>
+        <div className="flex items-center justify-between gap-3 border-b border-line px-5 py-3.5">
+          <div className="flex min-w-0 items-center gap-1.5">
+            {onBack && (
+              <button
+                onClick={onBack}
+                aria-label="返回"
+                title="返回"
+                className="-ml-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-2 transition-colors hover:bg-hover hover:text-ink cursor-pointer"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </button>
+            )}
+            <h2 className="truncate text-[15px] font-semibold text-ink">{title}</h2>
+          </div>
+          <button
+            onClick={onClose}
+            aria-label="关闭"
+            title="关闭 (Esc)"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-ink-2 transition-colors hover:bg-hover hover:text-ink cursor-pointer"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
         <div className="max-h-[calc(100vh-140px)] overflow-y-auto px-5 py-4">{children}</div>
       </div>

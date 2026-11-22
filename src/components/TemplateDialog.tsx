@@ -2,7 +2,7 @@
  * 提示词模板对话框：选择模板 → 填字段 → 实时预览 Prompt → 填入生成面板。
  * 内置模板（如 ecom-pdp）由代码构建；自定义模板存 IndexedDB，正文用 {{key}} 占位。
  */
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { BarChart3, BookMarked, BookOpen, Check, Library, Palette, Pencil, Plus, ShoppingBag, Sparkles, Trash2 } from 'lucide-react'
 import { store, useStore } from '../store/store'
 import { getAllTemplates, renderCustomTemplate } from '../lib/templates'
@@ -56,64 +56,46 @@ export function TemplateDialog() {
   const missing = resolvedFields.filter((f) => f.required && !values[f.key]?.trim())
   const sizeNote = result?.params?.size
 
+  // 关闭后回到模板列表，避免下次打开仍停在某个库
+  useEffect(() => {
+    if (!templateDialogOpen) setSelectedId(templates[0]?.id)
+  }, [templateDialogOpen, templates])
+
+  // 库浏览页统一带返回箭头，返回时回到模板列表
+  const libraryShell = (child: ReactNode) => (
+    <Modal
+      open
+      onClose={() => store.closeTemplateDialog()}
+      onBack={() => setSelectedId(templates[0]?.id)}
+      title="提示词模板"
+      width="max-w-4xl"
+    >
+      {child}
+    </Modal>
+  )
+
   // 自定义模板编辑器（新建 / 编辑）
   if (templateDialogOpen && editing) {
     return <TemplateEditor draft={editing} onClose={() => setEditing(null)} />
   }
 
   // 水仙提示词库浏览模式
-  if (templateDialogOpen && selectedId === 'builtin-shuixian') {
-    return (
-      <Modal open onClose={() => store.closeTemplateDialog()} title="提示词模板" width="max-w-4xl">
-        <ShuixianBrowser />
-      </Modal>
-    )
-  }
+  if (templateDialogOpen && selectedId === 'builtin-shuixian') return libraryShell(<ShuixianBrowser />)
 
   // 手绘风格配方库浏览模式
-  if (templateDialogOpen && selectedId === 'builtin-handdrawn') {
-    return (
-      <Modal open onClose={() => store.closeTemplateDialog()} title="提示词模板" width="max-w-4xl">
-        <HandDrawnBrowser />
-      </Modal>
-    )
-  }
+  if (templateDialogOpen && selectedId === 'builtin-handdrawn') return libraryShell(<HandDrawnBrowser />)
 
   // 科研图表配方库浏览模式
-  if (templateDialogOpen && selectedId === 'builtin-vivid-chart') {
-    return (
-      <Modal open onClose={() => store.closeTemplateDialog()} title="提示词模板" width="max-w-4xl">
-        <VividChartBrowser />
-      </Modal>
-    )
-  }
+  if (templateDialogOpen && selectedId === 'builtin-vivid-chart') return libraryShell(<VividChartBrowser />)
 
   // 电商场景模板库浏览模式
-  if (templateDialogOpen && selectedId === 'builtin-ecoskins') {
-    return (
-      <Modal open onClose={() => store.closeTemplateDialog()} title="提示词模板" width="max-w-4xl">
-        <EcomSkinsBrowser />
-      </Modal>
-    )
-  }
+  if (templateDialogOpen && selectedId === 'builtin-ecoskins') return libraryShell(<EcomSkinsBrowser />)
 
   // cc2image 模板大全浏览模式
-  if (templateDialogOpen && selectedId === 'builtin-cc2lib') {
-    return (
-      <Modal open onClose={() => store.closeTemplateDialog()} title="提示词模板" width="max-w-4xl">
-        <Cc2LibraryBrowser />
-      </Modal>
-    )
-  }
+  if (templateDialogOpen && selectedId === 'builtin-cc2lib') return libraryShell(<Cc2LibraryBrowser />)
 
   // GPT Image 2 精选画廊浏览模式
-  if (templateDialogOpen && selectedId === 'builtin-wy-gallery') {
-    return (
-      <Modal open onClose={() => store.closeTemplateDialog()} title="提示词模板" width="max-w-4xl">
-        <WyGalleryBrowser />
-      </Modal>
-    )
-  }
+  if (templateDialogOpen && selectedId === 'builtin-wy-gallery') return libraryShell(<WyGalleryBrowser />)
 
   if (!templateDialogOpen) return null
 

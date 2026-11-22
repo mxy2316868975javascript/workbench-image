@@ -3,7 +3,7 @@
  * 四个 store：settings（键值）、tasks（批量任务）、images（单张图片，含 Blob）、mangaProjects（漫画项目）
  */
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
-import type { ImageRecord, MangaProject, MangaSettings, Settings, TaskRecord } from './types'
+import type { ComposerDraft, ImageRecord, MangaProject, MangaSettings, Settings, TaskRecord } from './types'
 import { DEFAULT_MANGA_SETTINGS, DEFAULT_PARAMS } from './types'
 
 interface WorkbenchDB extends DBSchema {
@@ -16,10 +16,12 @@ interface WorkbenchDB extends DBSchema {
   }
   templates: { key: string; value: import('./types').CustomTemplate }
   mangaProjects: { key: string; value: MangaProject }
+  /** 左栏草稿：键固定为 composer（单草稿） */
+  drafts: { key: string; value: ComposerDraft }
 }
 
 const DB_NAME = 'image-workbench'
-const DB_VERSION = 3
+const DB_VERSION = 4
 
 let dbPromise: Promise<IDBPDatabase<WorkbenchDB>> | null = null
 
@@ -45,6 +47,28 @@ function getDB() {
         if (!db.objectStoreNames.contains('mangaProjects')) {
           db.createObjectStore('mangaProjects', { keyPath: 'id' })
         }
+        if (!db.objectStoreNames.contains('drafts')) {
+          // 单草稿，使用外部键（'composer'），值本身不带 id
+          db.createObjectStore('drafts')
+        }
+      },
+      // 其他标签页请求升级时主动让出连接，避免新版本标签页卡在打开数据库
+      blocking(_currentVersion, blockedVersion, event) {
+        try {
+          ;(event.target as IDBDatabase | null)?.close()
+        } catch {
+          /* 忽略关闭异常 */
+        }
+        dbPromise = null
+        console.warn(`[IndexedDB] 其他标签页请求升级到 v${blockedVersion}，已关闭当前连接`)
+      },
+      blocked(currentVersion, blockedVersion) {
+        console.warn(
+          `[IndexedDB] 升级到 v${blockedVersion} 被其他标签页阻塞（当前 v${currentVersion}），请关闭旧标签页`,
+        )
+      },
+      terminated() {
+        dbPromise = null
       },
     })
   }
@@ -284,10 +308,33 @@ export async function sweepStaleManga(): Promise<number> {
   return n
 }
 
+/* ---------------- 输入草稿 ---------------- */
+
+export const COMPOSER_DRAFT_KEY = 'composer'
+
+export async function getComposerDraft(): Promise<ComposerDraft | undefined> {
+  const db = await getDB()
+  return db.get('drafts', COMPOSER_DRAFT_KEY)
+}
+
+export async function putComposerDraft(draft: ComposerDraft): Promise<void> {
+  const db = await getDB()
+  await db.put('drafts', draft, COMPOSER_DRAFT_KEY)
+}
+
+export async function deleteComposerDraft(): Promise<void> {
+  const db = await getDB()
+  await db.delete('drafts', COMPOSER_DRAFT_KEY)
+}
+
 export async function estimateStorage(): Promise<{ usage: number; quota: number }> {
-  if (navigator.storage?.estimate) {
-    const { usage = 0, quota = 0 } = await navigator.storage.estimate()
-    return { usage, quota }
+  try {
+    if (navigator.storage?.estimate) {
+      const { usage = 0, quota = 0 } = await navigator.storage.estimate()
+      return { usage, quota }
+    }
+  } catch {
+    /* 某些隐私模式会拒绝 estimate，按未知处理，不影响启动 */
   }
   return { usage: 0, quota: 0 }
 }

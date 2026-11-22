@@ -5,6 +5,7 @@
  */
 import { useSyncExternalStore } from 'react'
 import type {
+  ConnectionState,
   CustomTemplate,
   GenParams,
   ImageRecord,
@@ -31,6 +32,7 @@ import {
 } from '../lib/db'
 import { generateOne } from '../lib/generator'
 import { makeThumbBlob, uid } from '../lib/image-utils'
+import { fetchModels } from '../lib/connection'
 
 const LOG_RING_MAX = 3000
 const IMAGE_LOG_MAX = 500
@@ -98,6 +100,8 @@ export interface AppState {
   settingsOpen: boolean
   lightbox: { imageIds: string[]; index: number } | null
   storageUsage: StorageUsage | null
+  /** 端点连通性：启动/保存设置后探测，提交预检只做软提示 */
+  connection: ConnectionState
   prefill: { prompt: string; params: GenParams; refImages?: Blob[]; keepRefs?: boolean; nonce: number } | null
   logDrawer: 'collapsed' | 'open' | 'full'
   historyOpen: boolean
@@ -114,6 +118,12 @@ export interface AppState {
   shuixian: { status: 'idle' | 'loading' | 'loaded' | 'error'; error?: string; prompts: ShuixianPrompt[]; categories: Record<string, ShuixianCategory> }
   /** 删除类操作的统一确认请求（App 挂载 ConfirmDialog 渲染） */
   confirmRequest: { title: string; message: string; confirmText?: string; run: () => void | Promise<void> } | null
+}
+
+export interface SubmitTaskResult {
+  ok: boolean
+  taskId?: string
+  error?: string
 }
 
 interface Internal {
@@ -144,6 +154,7 @@ class Store {
       settingsOpen: false,
       lightbox: null,
       storageUsage: null,
+      connection: { status: 'unknown' },
       prefill: null,
       logDrawer: 'collapsed' as const,
       leftOpen: prefs.leftOpen,
@@ -192,6 +203,7 @@ class Store {
     const swept = await sweepStaleImages()
     await this.loadHistoryFromDB()
     this.set({ settings, settingsLoaded: true, storageUsage: await estimateStorage() })
+    void this.checkConnection()
     if (swept > 0) {
       this.log('warn', `启动清扫：${swept} 张上次会话遗留的图片标记为失败，可重试`)
     }
@@ -306,9 +318,39 @@ class Store {
 
   async updateSettings(settings: Settings) {
     await dbSaveSettings(settings)
-    this.set({ settings, settingsOpen: false })
+    this.set({ settings, settingsOpen: false, connection: { status: 'unknown' } })
     this.pump() // 并发数可能变化
     this.log('info', `设置已保存（并发=${settings.concurrency}，自动重试=${settings.autoRetry ? '开' : '关'}）`)
+    void this.checkConnection(true)
+  }
+
+  /** 端点连通性探测：60 秒内复用结果；只用于预检提示，不阻塞生成 */
+  private connectionProbeSeq = 0
+
+  async checkConnection(force = false) {
+    const { settings, connection } = this.state
+    if (!settings.baseUrl.trim() || !settings.apiKey.trim() || !settings.model.trim()) {
+      this.connectionProbeSeq++ // 让在途探测失效
+      this.set({ connection: { status: 'unknown', checkedAt: Date.now() } })
+      return
+    }
+    if (!force && connection.checkedAt && Date.now() - connection.checkedAt < 60_000) return
+
+    const seq = ++this.connectionProbeSeq
+    const { baseUrl, apiKey } = settings
+    this.set({ connection: { ...connection, status: 'checking' } })
+    const probe = await fetchModels(baseUrl, apiKey)
+    // 只接受最后一次探测，且设置未被改过
+    if (seq !== this.connectionProbeSeq) return
+    if (this.state.settings.baseUrl !== baseUrl || this.state.settings.apiKey !== apiKey) return
+    this.set({
+      connection: {
+        status: probe.status,
+        checkedAt: Date.now(),
+        models: probe.models,
+        error: probe.message,
+      },
+    })
   }
 
   /** 拖拽调整并发：内存即时生效，持久化防抖 */
@@ -396,15 +438,17 @@ class Store {
 
   /* ---------------- 提交与调度 ---------------- */
 
-  submitTask(prompt: string, params: GenParams, count: number, refImages?: Blob[]) {
+  submitTask(prompt: string, params: GenParams, count: number, refImages?: Blob[]): SubmitTaskResult {
     const trimmed = prompt.trim()
-    if (!trimmed) return
+    if (!trimmed) return { ok: false, error: '先输入提示词' }
+    const n = Math.min(10, Math.max(1, Math.round(count)))
     const refs = refImages?.length ? refImages : undefined
+    const model = this.state.settings.model
     const now = Date.now()
     const taskId = uid('t_')
     const imageIds: string[] = []
     const images = { ...this.state.images }
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < n; i++) {
       const id = uid('i_')
       imageIds.push(id)
       images[id] = {
@@ -415,6 +459,7 @@ class Store {
         status: 'pending',
         progress: 0,
         phase: '排队中',
+        model,
         isEdit: !!refs,
         retryCount: 0,
         createdAt: now,
@@ -425,10 +470,11 @@ class Store {
       id: taskId,
       prompt: trimmed,
       params,
-      count,
+      count: n,
       status: 'running',
       createdAt: now,
       imageIds,
+      model,
       refImages: refs,
     }
     // 先更新内存，再持久化（图片含完整字段但无 Blob）
@@ -438,18 +484,47 @@ class Store {
       taskOrder: [taskId, ...this.state.taskOrder],
       activeTaskId: taskId,
     })
-    this.log('info', `提交任务：${count} 张图${refs ? '（图生图）' : ''}（并发上限 ${this.state.settings.concurrency}）·「${excerpt(trimmed, 24)}」`)
+    this.log('info', `提交任务：${n} 张图${refs ? '（图生图）' : ''}（模型 ${model}，并发上限 ${this.state.settings.concurrency}）·「${excerpt(trimmed, 24)}」`)
     // 窄屏下提交后自动切到看板，便于观察进度
     if (window.innerWidth < 1024) this.set({ narrowView: 'board' })
     // 先持久化，再入队，避免 pending/generating 写库乱序
     void (async () => {
-      await putTask(task)
-      for (const id of imageIds) {
-        if (this.state.images[id]) await putImage(this.state.images[id])
+      try {
+        await putTask(task)
+        for (const id of imageIds) {
+          const rec = this.state.images[id]
+          if (rec) await putImage(rec)
+        }
+        for (const id of imageIds) this.enqueueImage(id)
+        this.refreshStorage()
+      } catch (err) {
+        // 配额/隐私模式下首写失败：任务与图片直接置失败，避免永远停在排队中
+        const msg = err instanceof Error ? err.message : String(err)
+        this.log('error', `本地存储写入失败，任务未开始：${msg}`)
+        const nextImages = { ...this.state.images }
+        for (const id of imageIds) {
+          const rec = nextImages[id]
+          if (rec && rec.status === 'pending') {
+            nextImages[id] = {
+              ...rec,
+              status: 'failed',
+              phase: '失败',
+              error: `本地存储写入失败：${msg}`,
+              doneAt: Date.now(),
+            }
+          }
+        }
+        const current = this.state.tasks[taskId]
+        this.set({
+          images: nextImages,
+          tasks: current
+            ? { ...this.state.tasks, [taskId]: { ...current, status: 'failed', finishedAt: Date.now() } }
+            : this.state.tasks,
+        })
+        this.refreshStorage()
       }
-      for (const id of imageIds) this.enqueueImage(id)
-      this.refreshStorage()
     })()
+    return { ok: true, taskId }
   }
 
   private enqueueImage(imageId: string, attempt = 1) {

@@ -55,6 +55,8 @@ export function Lightbox() {
 
   const onKey = useCallback((e: KeyboardEvent) => {
     if (!lightbox) return
+    // 有 Modal（如删除确认）在最上层时，把键盘让给它
+    if (document.querySelector('[role="dialog"]')) return
     if (e.key === 'Escape') store.closeLightbox()
     if (e.key === 'ArrowLeft') store.lightboxNav(-1)
     if (e.key === 'ArrowRight') store.lightboxNav(1)
