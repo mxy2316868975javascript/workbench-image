@@ -263,12 +263,11 @@ export interface MangaSettings {
   textModel: string
 }
 
-const env = import.meta.env
-
 export const DEFAULT_MANGA_SETTINGS: MangaSettings = {
-  textBaseUrl: (env.VITE_TEXT_BASE_URL as string) || '/api/relay/v1',
-  textApiKey: (env.VITE_TEXT_API_KEY as string) || '',
-  textModel: (env.VITE_TEXT_MODEL as string) || 'gpt-4o-mini',
+  textBaseUrl: import.meta.env.VITE_TEXT_BASE_URL || '/api/relay/v1',
+  // 仅开发环境允许从 env 读 Key；生产构建必须通过设置面板填写
+  textApiKey: import.meta.env.DEV ? (import.meta.env.VITE_TEXT_API_KEY ?? '') : '',
+  textModel: import.meta.env.VITE_TEXT_MODEL || 'gpt-4o-mini',
 }
 
 /** 画风预设：锁定跨格风格一致性（英文描述对生图端点更稳） */

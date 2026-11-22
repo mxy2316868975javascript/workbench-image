@@ -17,9 +17,14 @@ https://github.com/mxy2316868975javascript/workbench-image/security/advisories/n
 ## 本项目的数据与密钥模型
 
 - 图片、历史、设置与 API 密钥只写入浏览器 IndexedDB，没有服务端存储。
-- `/api/relay` 只在本地 dev/preview 进程内转发请求，不落盘、不记录请求体。
-- `VITE_*` 环境变量会被打包进前端产物，等同于公开信息，**不要用它承载真实密钥**。
+- IndexedDB 没有内建加密。任何能执行脚本的 XSS、恶意浏览器扩展、或有权限的本地用户都可能读到密钥；请使用限额、可随时吊销的 Key，不要在共享浏览器配置里保存长期密钥。
+- `/api/relay` 只在本地 dev/preview 进程内转发请求，不落盘、不记录请求体。它只接受 `127.0.0.1` / `::1` 的回环请求，并校验 Host / Origin；不要用 `--host 0.0.0.0` 把 preview 暴露出去。
+- `VITE_*` 环境变量会被打包进前端产物，等同于公开信息，**不要用它承载真实密钥**。生产构建检测到名称像密钥的 `VITE_*` 非空会直接失败；CI 还会扫描源码与 `dist/`。
 - 生产部署建议使用支持 CORS 的端点，或自行托管转发层，并注意转发层的访问控制。
+
+## 私密漏洞报告
+
+仓库已开启 Private vulnerability reporting，请通过上面的 GitHub 私密报告链接提交。若链接不可用，说明该功能被关闭，请先通过仓库主页联系维护者，不要在公开 issue 中粘贴密钥、端点凭据或可利用细节。
 
 ## 密钥泄漏处理
 
@@ -28,3 +33,4 @@ https://github.com/mxy2316868975javascript/workbench-image/security/advisories/n
 1. 立即到服务商后台吊销并轮换该密钥。
 2. 若是提交历史泄漏，仅删除文件不够，需要重写历史后再强推。
 3. 检查 `dist/`、日志、截图与 issue 附件中是否还有残留。
+4. 运行 `npm run check:secrets` 与 `npm run check:dist` 复扫；本地 `dist/` 应直接删除后重建。

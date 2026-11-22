@@ -18,9 +18,10 @@ export interface HandDrawnRenderOptions {
   aspect?: string
 }
 
+// 固定到 commit，避免上游 main 变动导致内容漂移
 const DATA_BASES = [
-  'https://raw.githubusercontent.com/threerocks/hand-drawn-styles/main',
-  'https://cdn.jsdelivr.net/gh/threerocks/hand-drawn-styles@main',
+  'https://raw.githubusercontent.com/threerocks/hand-drawn-styles/b3727de45a2a40f3f3e2ce93f19d4a3c7a0c5f4b',
+  'https://cdn.jsdelivr.net/gh/threerocks/hand-drawn-styles@b3727de45a2a40f3f3e2ce93f19d4a3c7a0c5f4b',
 ]
 
 export const HANDDRAWN_KV_KEY = 'hand-drawn-library'

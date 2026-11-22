@@ -16,9 +16,10 @@ export interface CookbookCategory {
   tips: string[]
 }
 
+// 固定到 commit，避免上游 main 变动导致内容漂移
 const DOC_BASES = [
-  'https://raw.githubusercontent.com/freestylefly/awesome-gpt-image-2/main/docs/templates.md',
-  'https://cdn.jsdelivr.net/gh/freestylefly/awesome-gpt-image-2@main/docs/templates.md',
+  'https://raw.githubusercontent.com/freestylefly/awesome-gpt-image-2/af24cae98d95cc308260b1d637fb1227f9a6e5ca/docs/templates.md',
+  'https://cdn.jsdelivr.net/gh/freestylefly/awesome-gpt-image-2@af24cae98d95cc308260b1d637fb1227f9a6e5ca/docs/templates.md',
 ]
 
 export const CC2LIB_KV_KEY = 'cc2-cookbook'

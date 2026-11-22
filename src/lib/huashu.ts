@@ -16,9 +16,10 @@ export interface HuashuStyle {
   aiNative?: boolean
 }
 
+// 固定到 commit，避免上游 master 变动导致内容漂移
 const DATA_BASES = [
-  'https://raw.githubusercontent.com/alchaincyf/huashu-design/master/references/design-styles.md',
-  'https://cdn.jsdelivr.net/gh/alchaincyf/huashu-design@master/references/design-styles.md',
+  'https://raw.githubusercontent.com/alchaincyf/huashu-design/937113133ae446a69ea19d4ceed6cbd2ed3c7735/references/design-styles.md',
+  'https://cdn.jsdelivr.net/gh/alchaincyf/huashu-design@937113133ae446a69ea19d4ceed6cbd2ed3c7735/references/design-styles.md',
 ]
 
 export const HUASHU_KV_KEY = 'huashu-styles'

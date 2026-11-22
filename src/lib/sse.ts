@@ -63,6 +63,18 @@ export async function* sseEvents(body: ReadableStream<Uint8Array>): AsyncGenerat
       try { await reader.cancel() } catch { /* 忽略 */ }
     }
   }
+  // 流结束时可能还剩一行没有换行符的字段，先处理再 flush
+  if (buffer) {
+    let line = buffer
+    if (line.endsWith('\r')) line = line.slice(0, -1)
+    if (line === '' || line.startsWith(':')) {
+      yield* flush()
+    } else if (line.startsWith('data:')) {
+      dataLines.push(line.slice(5).trimStart())
+    } else if (line.startsWith('event:')) {
+      eventName = line.slice(6).trim() || 'message'
+    }
+  }
   // 流结束前残留的未分发事件
   yield* flush()
 }

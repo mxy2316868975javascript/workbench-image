@@ -10,6 +10,7 @@
  */
 import http2 from 'node:http2'
 import type { Plugin } from 'vite'
+import { isLocalRelayRequest } from './relay-guard'
 
 const RELAY_PREFIX = '/api/relay'
 const DEFAULT_RELAY_TARGET = 'https://api.openai.com'
@@ -40,6 +41,13 @@ function filterHeaders(headers: Record<string, string | string[] | undefined>): 
 
 function createRelayHandler(target: string) {
   return (req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse) => {
+    // 只接受本机回环请求，避免 dev/preview 被 --host 暴露后变成开放代理
+    if (!isLocalRelayRequest(req)) {
+      res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' })
+      res.end('relay only accepts local requests')
+      return
+    }
+
     // connect 风格挂载已剥掉 RELAY_PREFIX，req.url 即上游路径
     const upstreamPath = req.url ?? '/'
     const headers = filterHeaders(req.headers as Record<string, string | string[] | undefined>)

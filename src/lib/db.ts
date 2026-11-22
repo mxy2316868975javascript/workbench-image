@@ -77,12 +77,11 @@ function getDB() {
 
 /* ---------------- settings ---------------- */
 
-const env = import.meta.env
-
 export const FALLBACK_SETTINGS: Settings = {
-  baseUrl: (env.VITE_DEFAULT_BASE_URL as string) || '/api/relay/v1',
-  apiKey: (env.VITE_DEFAULT_API_KEY as string) || '',
-  model: (env.VITE_DEFAULT_MODEL as string) || 'gpt-image-1',
+  baseUrl: import.meta.env.VITE_DEFAULT_BASE_URL || '/api/relay/v1',
+  // 仅开发环境允许从 env 读 Key；生产构建必须通过设置面板填写
+  apiKey: import.meta.env.DEV ? (import.meta.env.VITE_DEFAULT_API_KEY ?? '') : '',
+  model: import.meta.env.VITE_DEFAULT_MODEL || 'gpt-image-1',
   concurrency: 2,
   autoRetry: true,
   defaultParams: { ...DEFAULT_PARAMS },
@@ -107,6 +106,11 @@ export async function loadSettings(): Promise<Settings> {
 export async function saveSettings(s: Settings): Promise<void> {
   const db = await getDB()
   await db.put('settings', s, 'app')
+}
+
+export async function getRawSettings(): Promise<Settings | undefined> {
+  const db = await getDB()
+  return (await db.get('settings', 'app')) as Settings | undefined
 }
 
 /* ---------------- tasks ---------------- */
@@ -148,6 +152,12 @@ export async function listTasks(limit = 100, offset = 0): Promise<TaskRecord[]> 
   return out
 }
 
+/** 全量读取任务（备份导出用，不走 200 条上限） */
+export async function getAllTasks(): Promise<TaskRecord[]> {
+  const db = await getDB()
+  return db.getAll('tasks')
+}
+
 /* ---------------- images ---------------- */
 
 export async function putImage(image: ImageRecord): Promise<void> {
@@ -164,6 +174,12 @@ export async function getImagesByTask(taskId: string): Promise<ImageRecord[]> {
   const db = await getDB()
   const idx = db.transaction('images').store.index('by-task')
   return idx.getAll(taskId)
+}
+
+/** 全量读取图片（备份导出用，含完整 Blob） */
+export async function getAllImages(): Promise<ImageRecord[]> {
+  const db = await getDB()
+  return db.getAll('images')
 }
 
 export async function deleteImage(id: string): Promise<void> {
@@ -183,6 +199,62 @@ export async function clearAllData(): Promise<void> {
   await Promise.all([
     tx.objectStore('tasks').clear(),
     tx.objectStore('images').clear(),
+  ])
+  await tx.done
+}
+
+export interface RestoreData {
+  tasks: TaskRecord[]
+  images: ImageRecord[]
+  customTemplates: import('./types').CustomTemplate[]
+  mangaProjects: MangaProject[]
+  appSettings: Omit<Settings, 'apiKey'>
+  mangaSettings: Omit<MangaSettings, 'textApiKey'>
+}
+
+/**
+ * 备份恢复：覆盖任务/图片/自定义模板/漫画项目，合并设置但保留当前浏览器里的 Key。
+ * 整个写入放在一个事务里，避免恢复到一半留下半套数据。
+ */
+export async function restoreAllData(data: RestoreData): Promise<void> {
+  const db = await getDB()
+  const tx = db.transaction(['tasks', 'images', 'templates', 'mangaProjects', 'settings'], 'readwrite')
+  const tasksStore = tx.objectStore('tasks')
+  const imagesStore = tx.objectStore('images')
+  const templatesStore = tx.objectStore('templates')
+  const mangaStore = tx.objectStore('mangaProjects')
+  const settingsStore = tx.objectStore('settings')
+
+  await Promise.all([
+    tasksStore.clear(),
+    imagesStore.clear(),
+    templatesStore.clear(),
+    mangaStore.clear(),
+  ])
+
+  const [currentApp, currentManga] = await Promise.all([
+    settingsStore.get('app') as Promise<Settings | undefined>,
+    settingsStore.get('manga') as Promise<MangaSettings | undefined>,
+  ])
+
+  await Promise.all([
+    ...data.tasks.map((task) => tasksStore.put(task)),
+    ...data.images.map((image) => imagesStore.put(image)),
+    ...data.customTemplates.map((template) => templatesStore.put(template)),
+    ...data.mangaProjects.map((project) => mangaStore.put(project)),
+    settingsStore.put(
+      { ...FALLBACK_SETTINGS, ...currentApp, ...data.appSettings, apiKey: currentApp?.apiKey ?? '' },
+      'app',
+    ),
+    settingsStore.put(
+      {
+        ...DEFAULT_MANGA_SETTINGS,
+        ...currentManga,
+        ...data.mangaSettings,
+        textApiKey: currentManga?.textApiKey ?? '',
+      },
+      'manga',
+    ),
   ])
   await tx.done
 }
@@ -246,6 +318,23 @@ export async function setKV(key: string, value: unknown): Promise<void> {
   await db.put('settings', value, key)
 }
 
+export async function deleteKV(key: string): Promise<void> {
+  const db = await getDB()
+  await db.delete('settings', key)
+}
+
+/** 清理已移除模板库遗留的缓存，避免旧版本缓存继续占用空间 */
+export async function cleanupRemovedLibraryCaches(): Promise<void> {
+  const removedKeys = ['vivid-cards', 'shuixian-library', 'ecom-templates']
+  for (const key of removedKeys) {
+    try {
+      await deleteKV(key)
+    } catch {
+      /* 单个缓存清理失败不影响启动 */
+    }
+  }
+}
+
 /* ---------------- 漫画工作室 ---------------- */
 
 /** 漫画设置（settings store 的 'manga' 键），合并默认值防旧版本缺字段；
@@ -262,6 +351,10 @@ export async function loadMangaSettings(): Promise<MangaSettings> {
 
 export async function saveMangaSettings(s: MangaSettings): Promise<void> {
   await setKV('manga', s)
+}
+
+export async function getRawMangaSettings(): Promise<MangaSettings | undefined> {
+  return getKV<MangaSettings>('manga')
 }
 
 export async function putMangaProject(project: MangaProject): Promise<void> {

@@ -31,10 +31,10 @@ function emptyDraft(prompt: string, params: GenParams, count: number, refs: Blob
 }
 
 export function PromptPanel() {
-  const { settings, prefill, tasks, taskOrder, images, connection, storageUsage } = useStore()
+  const { settings, prefill, tasks, taskOrder, images, connection, storageUsage, demo } = useStore()
 
   // 首次渲染同步读 localStorage 镜像，避免异步恢复时输入框先闪空
-  const [initialDraft] = useState(() => readLocalDraft())
+  const [initialDraft] = useState(() => (demo ? null : readLocalDraft()))
   const [prompt, setPrompt] = useState(initialDraft?.draft.prompt ?? '')
   const [params, setParams] = useState<GenParams>(initialDraft?.draft.params ?? settings.defaultParams)
   const [count, setCount] = useState(initialDraft?.draft.count ?? 1)
@@ -81,6 +81,11 @@ export function PromptPanel() {
   useEffect(() => {
     let cancelled = false
     void (async () => {
+      // 演示模式不读取真实草稿，避免把访客本机数据带进示例
+      if (demo) {
+        if (!cancelled) setHydrated(true)
+        return
+      }
       try {
         const stored = await readStoredDraft()
         if (cancelled || !stored) return
@@ -136,7 +141,6 @@ export function PromptPanel() {
     if (!prefill.keepRefs) setRefs(prefill.refImages ?? [])
     store.consumePrefill()
     textareaRef.current?.focus()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefill])
 
   // 参数默认值跟随设置：仅在用户未改过参数时生效
@@ -157,6 +161,8 @@ export function PromptPanel() {
   // 草稿自动保存：400ms 防抖；清空后删除草稿
   useEffect(() => {
     if (!hydrated) return
+    // 演示模式不落草稿
+    if (demo) return
     const isEmpty = !prompt.trim() && refs.length === 0 && count === 1
     if (isEmpty) {
       markDraftEmpty()
@@ -180,11 +186,11 @@ export function PromptPanel() {
       })
     }, 400)
     return () => window.clearTimeout(timer)
-  }, [hydrated, prompt, params, count, refs])
+  }, [hydrated, prompt, params, count, refs, demo])
 
   // 页面隐藏/卸载时立即落盘，避免最后一次防抖没跑完
   useEffect(() => {
-    if (!hydrated) return
+    if (!hydrated || demo) return
     const flush = () => {
       const isEmpty = !prompt.trim() && refs.length === 0 && count === 1
       if (isEmpty) {
@@ -202,7 +208,7 @@ export function PromptPanel() {
       window.removeEventListener('pagehide', flush)
       document.removeEventListener('visibilitychange', onVisibility)
     }
-  }, [hydrated, prompt, params, count, refs])
+  }, [hydrated, prompt, params, count, refs, demo])
 
   useEffect(() => {
     if (!refNotice) return
@@ -256,7 +262,7 @@ export function PromptPanel() {
     setDraftSavedAt(null)
     setDraftError(null)
     setSubmitError(null)
-    markDraftEmpty()
+    if (!demo) markDraftEmpty()
   }
 
   const undoClear = () => {
@@ -305,7 +311,7 @@ export function PromptPanel() {
   // 提示词为空由按钮禁用态与状态行表达，不再占一条红色 banner
   const bannerErrors = errors.filter((e) => e.id !== 'prompt-empty')
   const warnings = preflight.issues.filter((i) => i.level === 'warn')
-  const canSubmit = preflight.ok && !submitting
+  const canSubmit = preflight.ok && !submitting && !demo
   const hasContent = !!prompt.trim() || refs.length > 0 || count !== 1
   const storageWarn = warnings.some((w) => w.id === 'storage-full')
 
@@ -712,6 +718,7 @@ export function PromptPanel() {
         <button
           onClick={submit}
           disabled={!canSubmit}
+          title={demo ? '演示模式不会调用真实 API；下载仓库后可配置端点' : undefined}
           className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent text-sm font-semibold text-white shadow-sm transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-45 cursor-pointer"
         >
           {submitting ? (
@@ -721,11 +728,13 @@ export function PromptPanel() {
           ) : (
             <Sparkles className="h-4 w-4" />
           )}
-          {submitting
-            ? '提交中…'
-            : refs.length > 0
-              ? `以图生图 · 生成 ${count} 张`
-              : `生成 ${count} 张`}
+          {demo
+            ? '演示模式 · 不可生成'
+            : submitting
+              ? '提交中…'
+              : refs.length > 0
+                ? `以图生图 · 生成 ${count} 张`
+                : `生成 ${count} 张`}
         </button>
 
         {submitNotice && (

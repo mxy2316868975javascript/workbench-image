@@ -119,7 +119,7 @@ export async function generateOne(opts: GenerateOptions): Promise<GenerateResult
   try {
     let url: string
     let body: BodyInit
-    let headers: Record<string, string> = { Authorization: `Bearer ${settings.apiKey}` }
+    const headers: Record<string, string> = { Authorization: `Bearer ${settings.apiKey}` }
 
     if (opts.referenceImages?.length) {
       // 图生图：multipart/form-data，fetch 自动生成 boundary，不能手动设 Content-Type

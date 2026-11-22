@@ -3,21 +3,14 @@
  * 内置模板（如 ecom-pdp）由代码构建；自定义模板存 IndexedDB，正文用 {{key}} 占位。
  */
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { BarChart3, BookMarked, BookOpen, Check, Library, Palette, Pencil, Plus, ShoppingBag, Sparkles, Trash2 } from 'lucide-react'
+import { BookMarked, BookOpen, Brush, Check, Palette, Pencil, Plus, Sparkles, Trash2 } from 'lucide-react'
 import { store, useStore } from '../store/store'
 import { getAllTemplates, renderCustomTemplate } from '../lib/templates'
-import {
-  parseShuixianArguments,
-  renderShuixianPrompt,
-  shuixianImageUrl,
-  type ShuixianPrompt,
-} from '../lib/shuixian'
 import type { CustomTemplate, TemplateField } from '../lib/types'
 import { uid } from '../lib/image-utils'
 import { Button, Modal, Select } from './ui'
 import { HandDrawnBrowser } from './HandDrawnBrowser'
-import { VividChartBrowser } from './VividChartBrowser'
-import { EcomSkinsBrowser } from './EcomSkinsBrowser'
+import { HuashuStyleBrowser } from './HuashuStyleBrowser'
 import { Cc2LibraryBrowser } from './Cc2LibraryBrowser'
 import { WyGalleryBrowser } from './WyGalleryBrowser'
 
@@ -79,17 +72,11 @@ export function TemplateDialog() {
     return <TemplateEditor draft={editing} onClose={() => setEditing(null)} />
   }
 
-  // 水仙提示词库浏览模式
-  if (templateDialogOpen && selectedId === 'builtin-shuixian') return libraryShell(<ShuixianBrowser />)
-
   // 手绘风格配方库浏览模式
   if (templateDialogOpen && selectedId === 'builtin-handdrawn') return libraryShell(<HandDrawnBrowser />)
 
-  // 科研图表配方库浏览模式
-  if (templateDialogOpen && selectedId === 'builtin-vivid-chart') return libraryShell(<VividChartBrowser />)
-
-  // 电商场景模板库浏览模式
-  if (templateDialogOpen && selectedId === 'builtin-ecoskins') return libraryShell(<EcomSkinsBrowser />)
+  // 花叔 Design 风格库浏览模式
+  if (templateDialogOpen && selectedId === 'builtin-huashu') return libraryShell(<HuashuStyleBrowser />)
 
   // cc2image 模板大全浏览模式
   if (templateDialogOpen && selectedId === 'builtin-cc2lib') return libraryShell(<Cc2LibraryBrowser />)
@@ -104,21 +91,6 @@ export function TemplateDialog() {
       <div className="flex min-h-0 gap-4" style={{ height: '62vh' }}>
         {/* 模板列表 */}
         <div className="flex w-52 shrink-0 flex-col gap-1 overflow-y-auto">
-          {/* 水仙提示词库入口 */}
-          <button
-            onClick={() => setSelectedId('builtin-shuixian')}
-            className={`rounded-lg border px-3 py-2.5 text-left transition-colors cursor-pointer ${
-              selectedId === 'builtin-shuixian' ? 'border-accent bg-accent-soft' : 'border-line hover:bg-hover'
-            }`}
-          >
-            <div className="flex items-center gap-1.5">
-              <Library className="h-3.5 w-3.5 shrink-0 text-accent" />
-              <span className="truncate text-xs font-medium text-ink">水仙提示词库</span>
-            </div>
-            <div className="mt-1 line-clamp-2 text-[11px] leading-snug text-ink-3">
-              6600+ 中文生图提示词，按分类检索、填参数即用（来自 shuixian-prompts 开源库）
-            </div>
-          </button>
           {/* 手绘风格配方库入口 */}
           <button
             onClick={() => setSelectedId('builtin-handdrawn')}
@@ -132,6 +104,21 @@ export function TemplateDialog() {
             </div>
             <div className="mt-1 line-clamp-2 text-[11px] leading-snug text-ink-3">
               23 个编号手绘画风配方（儿童涂色、蜡笔童涂、吉卜力、水墨、像素、皮影…），填主体即出中文 Prompt
+            </div>
+          </button>
+          {/* 花叔 Design 风格库入口 */}
+          <button
+            onClick={() => setSelectedId('builtin-huashu')}
+            className={`rounded-lg border px-3 py-2.5 text-left transition-colors cursor-pointer ${
+              selectedId === 'builtin-huashu' ? 'border-accent bg-accent-soft' : 'border-line hover:bg-hover'
+            }`}
+          >
+            <div className="flex items-center gap-1.5">
+              <Brush className="h-3.5 w-3.5 shrink-0 text-accent" />
+              <span className="truncate text-xs font-medium text-ink">花叔 Design 风格库</span>
+            </div>
+            <div className="mt-1 line-clamp-2 text-[11px] leading-snug text-ink-3">
+              92 种设计风格 + 9 款 AI 生图风格，按「Mood, Not Layout」产出短 Prompt
             </div>
           </button>
           {/* cc2image 模板大全入口 */}
@@ -162,36 +149,6 @@ export function TemplateDialog() {
             </div>
             <div className="mt-1 line-clamp-2 text-[11px] leading-snug text-ink-3">
               171 条精选案例（动漫 / 摄影 / 海报 / 科研图表 / UI…）+ 18 条工艺原则，改主体即用
-            </div>
-          </button>
-          {/* 电商场景模板库入口 */}
-          <button
-            onClick={() => setSelectedId('builtin-ecoskins')}
-            className={`rounded-lg border px-3 py-2.5 text-left transition-colors cursor-pointer ${
-              selectedId === 'builtin-ecoskins' ? 'border-accent bg-accent-soft' : 'border-line hover:bg-hover'
-            }`}
-          >
-            <div className="flex items-center gap-1.5">
-              <ShoppingBag className="h-3.5 w-3.5 shrink-0 text-accent" />
-              <span className="truncate text-xs font-medium text-ink">电商场景模板库</span>
-            </div>
-            <div className="mt-1 line-clamp-2 text-[11px] leading-snug text-ink-3">
-              25 个电商场景模板（白底主图 / 场景图 / UGC / 直播…），hex 色 + 占比 + 留白铁律自动注入英文 Prompt
-            </div>
-          </button>
-          {/* 科研图表配方库入口 */}
-          <button
-            onClick={() => setSelectedId('builtin-vivid-chart')}
-            className={`rounded-lg border px-3 py-2.5 text-left transition-colors cursor-pointer ${
-              selectedId === 'builtin-vivid-chart' ? 'border-accent bg-accent-soft' : 'border-line hover:bg-hover'
-            }`}
-          >
-            <div className="flex items-center gap-1.5">
-              <BarChart3 className="h-3.5 w-3.5 shrink-0 text-accent" />
-              <span className="truncate text-xs font-medium text-ink">科研图表配方库</span>
-            </div>
-            <div className="mt-1 line-clamp-2 text-[11px] leading-snug text-ink-3">
-              148 个数据图配方（构图 / 视觉特征 / 配色），填数据产出示意版图表生图 Prompt
             </div>
           </button>
           {templates.map((t) => (
@@ -280,6 +237,17 @@ export function TemplateDialog() {
                     <Check className="h-3.5 w-3.5" /> 填入提示词
                   </Button>
                 </div>
+              </div>
+              <div className="border-t border-line pt-2 text-[10px] leading-relaxed text-ink-3">
+                内置模板整理自第三方开源项目，版权归原作者所有。
+                <a
+                  href="https://github.com/mxy2316868975javascript/workbench-image/blob/main/THIRD_PARTY_NOTICES.md"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="ml-1 underline decoration-line underline-offset-2 hover:text-accent"
+                >
+                  来源与许可
+                </a>
               </div>
             </>
           )}
@@ -376,7 +344,6 @@ export function TemplateEditor({ draft, onClose }: { draft: CustomTemplate | 'ne
     const values: Record<string, string> = {}
     for (const f of fields) values[f.key] = `【${f.label}】`
     return form.body.replace(/\{\{\s*(\w+)\s*\}\}/g, (_, key: string) => values[key] ?? `{{${key}}}`)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form.fieldsDef, form.body])
 
   const save = async () => {
@@ -458,215 +425,5 @@ export function TemplateEditor({ draft, onClose }: { draft: CustomTemplate | 'ne
         </div>
       </div>
     </Modal>
-  )
-}
-
-/* ---------------- 水仙提示词库浏览 ---------------- */
-
-const PAGE_SIZE = 60
-
-function ShuixianBrowser() {
-  const { shuixian } = useStore()
-  const [search, setSearch] = useState('')
-  const [category, setCategory] = useState('')
-  const [limit, setLimit] = useState(PAGE_SIZE)
-  const [selected, setSelected] = useState<ShuixianPrompt | null>(null)
-  const [argValues, setArgValues] = useState<Record<string, Record<string, string>>>({})
-  const [imgFailed, setImgFailed] = useState(false)
-
-  const categoryOptions = useMemo(() => {
-    const entries = Object.entries(shuixian.categories)
-    entries.sort((a, b) => b[1].count - a[1].count)
-    return entries.map(([name, meta]) => ({ value: name, label: `${name}（${meta.count}）` }))
-  }, [shuixian.categories])
-
-  const filtered = useMemo(() => {
-    const kw = search.trim().toLowerCase()
-    return shuixian.prompts.filter((p) => {
-      if (category && p.category !== category) return false
-      if (kw && !(p.title.toLowerCase().includes(kw) || p.prompt.toLowerCase().includes(kw))) return false
-      return true
-    })
-  }, [shuixian.prompts, search, category])
-
-  const args = selected ? parseShuixianArguments(selected.prompt) : []
-  const selValues = selected ? (argValues[String(selected.id)] ?? {}) : {}
-  const setArg = (name: string, v: string) => {
-    if (!selected) return
-    setArgValues((m) => ({ ...m, [String(selected.id)]: { ...(m[String(selected.id)] ?? {}), [name]: v } }))
-  }
-  const rendered = selected ? renderShuixianPrompt(selected.prompt, selValues) : ''
-  const selectedImg = selected && !imgFailed ? shuixianImageUrl(selected.id) : null
-
-  // 切换提示词时重置示例图状态
-  const pickPrompt = (p: ShuixianPrompt) => {
-    setSelected(p)
-    setImgFailed(false)
-  }
-
-  return (
-    <div className="flex min-h-0 gap-4" style={{ height: '62vh' }}>
-      {/* 左：检索 + 列表 */}
-      <div className="flex w-72 shrink-0 flex-col gap-2.5">
-        {shuixian.status === 'loaded' ? (
-          <>
-            <input
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value)
-                setLimit(PAGE_SIZE)
-              }}
-              placeholder="搜索标题或提示词…"
-              className="h-8 w-full px-2.5 text-xs"
-            />
-            <Select
-              size="sm"
-              value={category}
-              options={[{ value: '', label: `全部分类（${shuixian.prompts.length}）` }, ...categoryOptions]}
-              onChange={(v) => {
-                setCategory(v)
-                setLimit(PAGE_SIZE)
-              }}
-            />
-            <div className="text-[11px] text-ink-3">
-              {filtered.length} 条结果{filtered.length > limit ? '，仅显示前 ' + limit + ' 条' : ''}
-            </div>
-            <div className="min-h-0 flex-1 space-y-1 overflow-y-auto">
-              {filtered.slice(0, limit).map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => pickPrompt(p)}
-                  className={`flex w-full items-center gap-2 rounded-lg border px-2.5 py-2 text-left transition-colors cursor-pointer ${
-                    selected?.id === p.id ? 'border-accent bg-accent-soft' : 'border-line hover:bg-hover'
-                  }`}
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-xs font-medium text-ink">{p.title}</span>
-                    <span className="mt-0.5 flex items-center gap-1.5 text-[10px] text-ink-3">
-                      <span className="rounded bg-subtle px-1 py-px">{p.category}</span>
-                      {p.likes > 0 && <span>♥ {p.likes}</span>}
-                    </span>
-                  </span>
-                </button>
-              ))}
-              {filtered.length > limit && (
-                <button
-                  onClick={() => setLimit((l) => l + PAGE_SIZE)}
-                  className="w-full rounded-lg border border-line py-2 text-xs text-ink-2 hover:bg-hover cursor-pointer"
-                >
-                  加载更多（还有 {filtered.length - limit} 条）
-                </button>
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-line px-4 text-center">
-            {shuixian.status === 'loading' ? (
-              <>
-                <div className="text-xs text-ink-2">正在拉取提示词库（约 14MB，一次性）…</div>
-                <div className="text-[11px] text-ink-3">来源 raw.githubusercontent / jsDelivr 双源回退，完成后本地缓存</div>
-              </>
-            ) : shuixian.status === 'error' ? (
-              <>
-                <div className="text-xs text-danger break-all">拉取失败：{shuixian.error}</div>
-                <Button variant="default" size="sm" onClick={() => void store.loadShuixianLibrary()}>重试</Button>
-              </>
-            ) : (
-              <>
-                <Library className="h-6 w-6 text-ink-3" />
-                <div className="text-xs leading-relaxed text-ink-2">
-                  拉取「水仙提示词库」6600+ 条中文生图提示词（含分类与示例图），
-                  一次性下载后缓存到本浏览器，之后离线可用。
-                </div>
-                <Button variant="primary" size="sm" onClick={() => void store.loadShuixianLibrary()}>
-                  拉取提示词库
-                </Button>
-              </>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* 右：详情 + 填参 */}
-      <div className="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto pr-1 [&>*]:shrink-0">
-        {selected ? (
-          <>
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium text-ink">{selected.title}</div>
-                <div className="mt-0.5 text-[11px] text-ink-3">
-                  分类：{selected.category}
-                  {selected.likes > 0 ? ` · ♥ ${selected.likes}` : ''}
-                </div>
-              </div>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => {
-                  store.applyPromptFill(rendered)
-                  store.closeTemplateDialog()
-                }}
-              >
-                <Check className="h-3.5 w-3.5" /> 填入提示词
-              </Button>
-            </div>
-
-            {/* 示例图（懒加载单张） */}
-            {selectedImg && (
-              <div className="flex justify-center rounded-lg border border-line bg-subtle/50 p-2">
-                <img
-                  src={selectedImg}
-                  alt="示例图"
-                  onError={() => setImgFailed(true)}
-                  className="max-h-64 rounded-md object-contain"
-                  loading="lazy"
-                />
-              </div>
-            )}
-
-            {/* 可填参数 */}
-            {args.length > 0 && (
-              <div className="space-y-2.5">
-                <div className="text-xs font-medium text-ink-2">可填参数（留空用默认值）</div>
-                {args.map((a) => (
-                  <label key={a.name} className="flex flex-col gap-1.5">
-                    <span className="text-[11px] text-ink-3">
-                      {a.name}
-                      {a.defaultValue && <span className="ml-1">默认：{a.defaultValue.slice(0, 30)}{a.defaultValue.length > 30 ? '…' : ''}</span>}
-                    </span>
-                    {a.defaultValue.length > 40 ? (
-                      <textarea
-                        value={selValues[a.name] ?? ''}
-                        onChange={(e) => setArg(a.name, e.target.value)}
-                        placeholder={a.defaultValue}
-                        className="min-h-14 w-full resize-y p-2.5 text-[13px] leading-relaxed placeholder:text-ink-3"
-                      />
-                    ) : (
-                      <input
-                        value={selValues[a.name] ?? ''}
-                        onChange={(e) => setArg(a.name, e.target.value)}
-                        placeholder={a.defaultValue}
-                        className="h-9 w-full px-3 text-[13px]"
-                      />
-                    )}
-                  </label>
-                ))}
-              </div>
-            )}
-
-            {/* 最终提示词预览 */}
-            <div className="rounded-lg border border-line">
-              <div className="border-b border-line px-3 py-1.5 text-[11px] font-medium text-ink-2">最终提示词</div>
-              <pre className="log-font max-h-52 overflow-y-auto whitespace-pre-wrap px-3 py-2.5 text-ink-2">{rendered}</pre>
-            </div>
-          </>
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-2 text-ink-3">
-            <Library className="h-6 w-6" />
-            <p className="text-xs">{shuixian.status === 'loaded' ? '从左侧选择一条提示词' : '先拉取提示词库，再从左侧选择'}</p>
-          </div>
-        )}
-      </div>
-    </div>
   )
 }

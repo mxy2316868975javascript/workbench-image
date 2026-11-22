@@ -15,13 +15,13 @@ import { TemplateDialog } from './components/TemplateDialog'
 import { MangaWorkspace } from './components/manga/MangaWorkspace'
 
 export default function App() {
-  const { settingsLoaded, historyOpen, leftOpen, narrowView, tasks, taskOrder, workspace } = useStore()
+  const { settingsLoaded, historyOpen, leftOpen, narrowView, tasks, taskOrder, workspace, demo } = useStore()
 
   const [slowOpen, setSlowOpen] = useState(false)
 
   useEffect(() => {
     void store.init()
-    void mangaStore.init()
+    if (!store.getState().demo) void mangaStore.init()
   }, [])
 
   // 数据库升级被其他标签页占用时，给出可操作的提示，而不是一直停在加载态
@@ -52,7 +52,14 @@ export default function App() {
   return (
     <ThemeProvider>
       <div className="grid h-full grid-rows-[auto_1fr_auto] overflow-hidden">
-        <TopBar />
+        <div className="flex flex-col">
+          <TopBar />
+          {demo && (
+            <div className="border-b border-line bg-accent-soft px-4 py-1.5 text-center text-[11px] leading-5 text-accent">
+              演示模式 · 示例数据，不会调用真实 API。下载仓库后在本地配置端点即可生成。
+            </div>
+          )}
+        </div>
         {/* 窄屏页签（生成 / 看板），面板全高互斥显示，避免挤压重叠；仅生图工作台显示 */}
         <div className={`shrink-0 border-b border-line bg-panel lg:hidden ${workspace === 'image' ? 'flex' : 'hidden'}`}>
           <button
