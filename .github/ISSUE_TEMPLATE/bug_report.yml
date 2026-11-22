@@ -1,0 +1,55 @@
+name: 问题反馈
+description: 报告可复现的 bug 或异常行为
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提交前请先搜索已有 issue。请勿粘贴 API 密钥、端点凭据或包含密钥的截图。
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: 现象
+      description: 实际发生了什么？期望是什么？
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开…
+        2. 点击…
+        3. 看到…
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: 环境
+      description: 操作系统、浏览器版本、Node 版本、部署方式（dev / preview / 静态托管）
+      placeholder: macOS 15 / Chrome 131 / Node 22.12 / npm run dev
+    validations:
+      required: true
+  - type: dropdown
+    id: endpoint
+    attributes:
+      label: 端点类型
+      options:
+        - 内置 /api/relay 转发
+        - 直连支持 CORS 的端点
+        - 其他 / 不确定
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 控制台日志
+      description: 底部日志抽屉或浏览器 DevTools 的相关输出。请先删除密钥。
+      render: shell
+  - type: textarea
+    id: extra
+    attributes:
+      label: 补充信息
+      description: 截图（已脱敏）、相关 issue、可能的定位思路。

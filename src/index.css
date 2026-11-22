@@ -1,0 +1,146 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* 主题变量：浅色为默认，.dark 覆盖 */
+:root {
+  --bg: #f6f7fb;
+  --bg-panel: #ffffff;
+  --bg-subtle: #eef0f6;
+  --bg-hover: #e8ebf3;
+  --border: #dfe3ec;
+  --text-1: #1a1d27;
+  --text-2: #5b6272;
+  --text-3: #8b91a3;
+  --accent: #6366f1;
+  --accent-strong: #4f46e5;
+  --accent-soft: #eef0fe;
+  --success: #16a34a;
+  --success-soft: #e8f7ee;
+  --warn: #d97706;
+  --warn-soft: #fdf3e3;
+  --danger: #dc2626;
+  --danger-soft: #fdecec;
+  --shadow: 0 1px 2px rgb(16 24 40 / 0.05), 0 4px 16px rgb(16 24 40 / 0.06);
+}
+
+.dark {
+  --bg: #101218;
+  --bg-panel: #171a21;
+  --bg-subtle: #1e222b;
+  --bg-hover: #262b36;
+  --border: #2a2f3a;
+  --text-1: #ecEEF3;
+  --text-2: #a6adbd;
+  --text-3: #6b7385;
+  --accent: #818cf8;
+  --accent-strong: #6366f1;
+  --accent-soft: #23253f;
+  --success: #4ade80;
+  --success-soft: #13291c;
+  --warn: #fbbf24;
+  --warn-soft: #2d2410;
+  --danger: #f87171;
+  --danger-soft: #2e1516;
+  --shadow: 0 1px 2px rgb(0 0 0 / 0.4), 0 4px 16px rgb(0 0 0 / 0.35);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-panel: var(--bg-panel);
+  --color-subtle: var(--bg-subtle);
+  --color-hover: var(--bg-hover);
+  --color-line: var(--border);
+  --color-ink: var(--text-1);
+  --color-ink-2: var(--text-2);
+  --color-ink-3: var(--text-3);
+  --color-accent: var(--accent);
+  --color-accent-strong: var(--accent-strong);
+  --color-accent-soft: var(--accent-soft);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+}
+
+html, body, #root { height: 100%; }
+
+body {
+  background: var(--bg);
+  color: var(--text-1);
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+}
+
+/* 生成中的微光占位 */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(110deg, var(--bg-subtle) 40%, var(--bg-hover) 50%, var(--bg-subtle) 60%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s linear infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.pulse-dot { animation: pulse-dot 1.2s ease-in-out infinite; }
+
+/* 细滚动条 */
+* { scrollbar-width: thin; scrollbar-color: var(--border) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+*::-webkit-scrollbar-track { background: transparent; }
+
+/* 日志等宽 */
+.log-font {
+  font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+/* 输入控件基础样式 */
+input, textarea, select {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  color: var(--text-1);
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+input:focus, textarea:focus, select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+select option { background: var(--bg-panel); color: var(--text-1); }
+
+/* 剧本文档 Markdown 预览（ScriptStep），颜色跟随主题 token */
+.md-doc { font-size: 13px; line-height: 1.75; color: var(--text-1); }
+.md-doc h1 { font-size: 17px; font-weight: 600; margin: 4px 0 10px; color: var(--text-1); }
+.md-doc h2 {
+  font-size: 14.5px; font-weight: 600; margin: 18px 0 8px; padding-left: 8px;
+  border-left: 3px solid var(--accent); color: var(--text-1);
+}
+.md-doc h3 { font-size: 13.5px; font-weight: 600; margin: 14px 0 6px; color: var(--text-1); }
+.md-doc p { margin: 6px 0; }
+.md-doc ul, .md-doc ol { margin: 6px 0; padding-left: 20px; }
+.md-doc li { margin: 3px 0; }
+.md-doc li::marker { color: var(--text-3); }
+.md-doc strong { color: var(--text-1); font-weight: 600; }
+.md-doc blockquote {
+  margin: 8px 0; padding: 6px 12px; border-left: 3px solid var(--border);
+  background: var(--bg-subtle); border-radius: 0 8px 8px 0; color: var(--text-2);
+}
+.md-doc blockquote p { margin: 2px 0; }
+.md-doc hr { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+.md-doc code {
+  font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 12px;
+  background: var(--bg-subtle); padding: 1px 5px; border-radius: 4px;
+}
+.md-doc pre { background: var(--bg-subtle); padding: 10px 12px; border-radius: 8px; overflow-x: auto; }
+.md-doc pre code { background: transparent; padding: 0; }

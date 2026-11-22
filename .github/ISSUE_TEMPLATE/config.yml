@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 安全问题（请私下报告）
+    url: https://github.com/mxy2316868975javascript/workbench-image/security/advisories/new
+    about: 涉及密钥、越权、数据泄漏的问题不要开公开 issue。
+  - name: 使用与配置问题
+    url: https://github.com/mxy2316868975javascript/workbench-image#readme
+    about: 先查看 README 的快速开始、环境变量与 relay 说明。

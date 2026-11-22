@@ -1,0 +1,14 @@
+node_modules
+dist
+.v2c
+.env
+.env.local
+.env.*.local
+*.local
+.DS_Store
+.node-local
+.zcode
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+coverage
+*.log

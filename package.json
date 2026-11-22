@@ -1,0 +1,55 @@
+{
+  "name": "image-workbench",
+  "private": true,
+  "version": "0.1.0",
+  "description": "纯浏览器端 AI 生图工作台：流式生图、批量队列、历史管理与内置提示词模板库，数据只存本机 IndexedDB。",
+  "type": "module",
+  "license": "MIT",
+  "author": "Lemon (https://github.com/mxy2316868975javascript)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mxy2316868975javascript/workbench-image.git"
+  },
+  "homepage": "https://github.com/mxy2316868975javascript/workbench-image#readme",
+  "bugs": {
+    "url": "https://github.com/mxy2316868975javascript/workbench-image/issues"
+  },
+  "keywords": [
+    "ai",
+    "image-generation",
+    "gpt-image",
+    "openai",
+    "prompt",
+    "react",
+    "vite",
+    "indexeddb",
+    "生图"
+  ],
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "dev": "node scripts/run-vite.cjs dev",
+    "build": "tsc -b && node scripts/run-vite.cjs build",
+    "preview": "node scripts/run-vite.cjs preview",
+    "typecheck": "tsc -b"
+  },
+  "dependencies": {
+    "dompurify": "^3.4.18",
+    "idb": "^8.0.4",
+    "lucide-react": "^1.77.0",
+    "marked": "^18.2.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.5",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^5.2.0",
+    "tailwindcss": "^4.3.5",
+    "typescript": "^7.0.2",
+    "vite": "^7.3.8"
+  }
+}

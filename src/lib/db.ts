@@ -1,0 +1,293 @@
+/**
+ * IndexedDB 封装：库 image-workbench v1
+ * 四个 store：settings（键值）、tasks（批量任务）、images（单张图片，含 Blob）、mangaProjects（漫画项目）
+ */
+import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
+import type { ImageRecord, MangaProject, MangaSettings, Settings, TaskRecord } from './types'
+import { DEFAULT_MANGA_SETTINGS, DEFAULT_PARAMS } from './types'
+
+interface WorkbenchDB extends DBSchema {
+  settings: { key: string; value: unknown }
+  tasks: { key: string; value: TaskRecord; indexes: { 'by-created': number } }
+  images: {
+    key: string
+    value: ImageRecord
+    indexes: { 'by-task': string; 'by-created': number }
+  }
+  templates: { key: string; value: import('./types').CustomTemplate }
+  mangaProjects: { key: string; value: MangaProject }
+}
+
+const DB_NAME = 'image-workbench'
+const DB_VERSION = 3
+
+let dbPromise: Promise<IDBPDatabase<WorkbenchDB>> | null = null
+
+function getDB() {
+  if (!dbPromise) {
+    dbPromise = openDB<WorkbenchDB>(DB_NAME, DB_VERSION, {
+      upgrade(db) {
+        if (!db.objectStoreNames.contains('settings')) {
+          db.createObjectStore('settings')
+        }
+        if (!db.objectStoreNames.contains('tasks')) {
+          const tasks = db.createObjectStore('tasks', { keyPath: 'id' })
+          tasks.createIndex('by-created', 'createdAt')
+        }
+        if (!db.objectStoreNames.contains('images')) {
+          const images = db.createObjectStore('images', { keyPath: 'id' })
+          images.createIndex('by-task', 'taskId')
+          images.createIndex('by-created', 'createdAt')
+        }
+        if (!db.objectStoreNames.contains('templates')) {
+          db.createObjectStore('templates', { keyPath: 'id' })
+        }
+        if (!db.objectStoreNames.contains('mangaProjects')) {
+          db.createObjectStore('mangaProjects', { keyPath: 'id' })
+        }
+      },
+    })
+  }
+  return dbPromise
+}
+
+/* ---------------- settings ---------------- */
+
+const env = import.meta.env
+
+export const FALLBACK_SETTINGS: Settings = {
+  baseUrl: (env.VITE_DEFAULT_BASE_URL as string) || '/api/relay/v1',
+  apiKey: (env.VITE_DEFAULT_API_KEY as string) || '',
+  model: (env.VITE_DEFAULT_MODEL as string) || 'gpt-image-1',
+  concurrency: 2,
+  autoRetry: true,
+  defaultParams: { ...DEFAULT_PARAMS },
+}
+
+export async function loadSettings(): Promise<Settings> {
+  try {
+    const db = await getDB()
+    const saved = (await db.get('settings', 'app')) as Settings | undefined
+    if (!saved) return { ...FALLBACK_SETTINGS }
+    // 合并默认值，防止旧版本缺字段
+    return {
+      ...FALLBACK_SETTINGS,
+      ...saved,
+      defaultParams: { ...DEFAULT_PARAMS, ...(saved.defaultParams ?? {}) },
+    }
+  } catch {
+    return { ...FALLBACK_SETTINGS }
+  }
+}
+
+export async function saveSettings(s: Settings): Promise<void> {
+  const db = await getDB()
+  await db.put('settings', s, 'app')
+}
+
+/* ---------------- tasks ---------------- */
+
+export async function putTask(task: TaskRecord): Promise<void> {
+  const db = await getDB()
+  await db.put('tasks', task)
+}
+
+export async function getTask(id: string): Promise<TaskRecord | undefined> {
+  const db = await getDB()
+  return db.get('tasks', id)
+}
+
+export async function deleteTask(id: string): Promise<void> {
+  const db = await getDB()
+  const tx = db.transaction(['tasks', 'images'], 'readwrite')
+  await tx.objectStore('tasks').delete(id)
+  const idx = tx.objectStore('images').index('by-task')
+  let cursor = await idx.openCursor(IDBKeyRange.only(id))
+  while (cursor) {
+    await cursor.delete()
+    cursor = await cursor.continue()
+  }
+  await tx.done
+}
+
+export async function listTasks(limit = 100, offset = 0): Promise<TaskRecord[]> {
+  const db = await getDB()
+  const idx = db.transaction('tasks').store.index('by-created')
+  const out: TaskRecord[] = []
+  let cursor = await idx.openCursor(null, 'prev') // 新→旧
+  let skipped = 0
+  while (cursor && out.length < limit) {
+    if (skipped < offset) { skipped++; cursor = await cursor.continue(); continue }
+    out.push(cursor.value)
+    cursor = await cursor.continue()
+  }
+  return out
+}
+
+/* ---------------- images ---------------- */
+
+export async function putImage(image: ImageRecord): Promise<void> {
+  const db = await getDB()
+  await db.put('images', image)
+}
+
+export async function getImage(id: string): Promise<ImageRecord | undefined> {
+  const db = await getDB()
+  return db.get('images', id)
+}
+
+export async function getImagesByTask(taskId: string): Promise<ImageRecord[]> {
+  const db = await getDB()
+  const idx = db.transaction('images').store.index('by-task')
+  return idx.getAll(taskId)
+}
+
+export async function deleteImage(id: string): Promise<void> {
+  const db = await getDB()
+  await db.delete('images', id)
+}
+
+export async function countImages(): Promise<number> {
+  const db = await getDB()
+  return db.count('images')
+}
+
+/** 清空任务与图片两个 store（保留 settings），用于"清空数据库"功能 */
+export async function clearAllData(): Promise<void> {
+  const db = await getDB()
+  const tx = db.transaction(['tasks', 'images'], 'readwrite')
+  await Promise.all([
+    tx.objectStore('tasks').clear(),
+    tx.objectStore('images').clear(),
+  ])
+  await tx.done
+}
+
+/**
+ * 启动清扫：上次会话遗留在 pending/generating/downloading 的图片标记为失败（会话中断），
+ * 让用户可以手动重试。
+ */
+export async function sweepStaleImages(): Promise<number> {
+  const db = await getDB()
+  const tx = db.transaction('images', 'readwrite')
+  let cursor = await tx.store.openCursor()
+  let n = 0
+  const stale = new Set(['pending', 'generating', 'downloading'])
+  while (cursor) {
+    const rec = cursor.value
+    if (stale.has(rec.status)) {
+      rec.status = 'failed'
+      rec.error = '应用关闭或页面刷新导致中断，可重试'
+      rec.doneAt = Date.now()
+      rec.logs = [
+        ...rec.logs,
+        { t: Date.now(), level: 'error' as const, text: '会话中断，任务标记为失败' },
+      ].slice(-500)
+      await cursor.update(rec)
+      n++
+    }
+    cursor = await cursor.continue()
+  }
+  await tx.done
+  return n
+}
+
+/* ---------------- 自定义提示词模板 ---------------- */
+
+export async function listCustomTemplates(): Promise<import('./types').CustomTemplate[]> {
+  const db = await getDB()
+  const all = await db.getAll('templates')
+  return all.sort((a, b) => b.createdAt - a.createdAt)
+}
+
+export async function putCustomTemplate(t: import('./types').CustomTemplate): Promise<void> {
+  const db = await getDB()
+  await db.put('templates', t)
+}
+
+export async function deleteCustomTemplate(id: string): Promise<void> {
+  const db = await getDB()
+  await db.delete('templates', id)
+}
+
+/* ---------------- 通用 KV（settings store 内的独立键，存提示词库数据等大对象） ---------------- */
+
+export async function getKV<T>(key: string): Promise<T | undefined> {
+  const db = await getDB()
+  return (await db.get('settings', key)) as T | undefined
+}
+
+export async function setKV(key: string, value: unknown): Promise<void> {
+  const db = await getDB()
+  await db.put('settings', value, key)
+}
+
+/* ---------------- 漫画工作室 ---------------- */
+
+/** 漫画设置（settings store 的 'manga' 键），合并默认值防旧版本缺字段；
+ *  旧版本记录只有 textModel 字段（无独立文本端点），整体让位给新默认值 */
+export async function loadMangaSettings(): Promise<MangaSettings> {
+  try {
+    const saved = (await getKV<Partial<MangaSettings>>('manga')) ?? {}
+    if (saved && !saved.textBaseUrl) return { ...DEFAULT_MANGA_SETTINGS }
+    return { ...DEFAULT_MANGA_SETTINGS, ...saved }
+  } catch {
+    return { ...DEFAULT_MANGA_SETTINGS }
+  }
+}
+
+export async function saveMangaSettings(s: MangaSettings): Promise<void> {
+  await setKV('manga', s)
+}
+
+export async function putMangaProject(project: MangaProject): Promise<void> {
+  const db = await getDB()
+  await db.put('mangaProjects', project)
+}
+
+export async function getMangaProject(id: string): Promise<MangaProject | undefined> {
+  const db = await getDB()
+  return db.get('mangaProjects', id)
+}
+
+export async function deleteMangaProject(id: string): Promise<void> {
+  const db = await getDB()
+  await db.delete('mangaProjects', id)
+}
+
+export async function listMangaProjects(): Promise<MangaProject[]> {
+  const db = await getDB()
+  const all = await db.getAll('mangaProjects')
+  return all.sort((a, b) => b.updatedAt - a.updatedAt) // 新→旧
+}
+
+/** 启动清扫：上次会话遗留的 generating/queued 状态标记为失败，让用户可重试 */
+export async function sweepStaleManga(): Promise<number> {
+  const db = await getDB()
+  const all = await db.getAll('mangaProjects')
+  const stale = new Set(['generating', 'queued'])
+  let n = 0
+  for (const project of all) {
+    let dirty = false
+    const fix = (item: { status: string; error?: string }) => {
+      if (stale.has(item.status)) {
+        item.status = 'failed'
+        item.error = '应用关闭或页面刷新导致中断，可重试'
+        dirty = true
+        n++
+      }
+    }
+    for (const c of project.characters) fix(c)
+    for (const s of project.scenes) fix(s)
+    if (dirty) await putMangaProject(project)
+  }
+  return n
+}
+
+export async function estimateStorage(): Promise<{ usage: number; quota: number }> {
+  if (navigator.storage?.estimate) {
+    const { usage = 0, quota = 0 } = await navigator.storage.estimate()
+    return { usage, quota }
+  }
+  return { usage: 0, quota: 0 }
+}
