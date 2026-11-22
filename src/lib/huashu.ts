@@ -24,19 +24,6 @@ const DATA_BASES = [
 
 export const HUASHU_KV_KEY = 'huashu-styles'
 
-/** AI 生图专用风格（灵魂在 AI 直出图，HTML 做不了） */
-const AI_NATIVE_NAMES = [
-  'Active Theory',
-  'Field.io',
-  'Resn',
-  'Zach Lieberman',
-  'Raven Kwok',
-  'Ash Thorp',
-  'Territory Studio',
-  'Neo Shen',
-  'Sagmeister & Walsh',
-]
-
 export async function fetchHuashuStyles(): Promise<HuashuStyle[]> {
   let lastErr: unknown
   let md = ''
@@ -62,6 +49,12 @@ export function parseHuashuStyles(md: string): HuashuStyle[] {
   let cur: HuashuStyle | null = null
   for (const rawLine of md.split('\n')) {
     const line = rawLine.trim()
+    if (line.startsWith('## ') && line.includes('AI 生图专用风格')) {
+      group = 'AI 生图专用风格'
+      sub = ''
+      cur = null
+      continue
+    }
     const groupMatch = line.match(/^## (.+?)\((\d+)种\)/)
     if (groupMatch) {
       group = groupMatch[1].trim()
@@ -74,11 +67,30 @@ export function parseHuashuStyles(md: string): HuashuStyle[] {
       sub = subMatch[1].trim()
       continue
     }
+    // AI 生图专用风格是独立表格：| 风格（特征） | 灵魂 | 为什么 HTML 做不了 |
+    if (group === 'AI 生图专用风格') {
+      const tableMatch = line.match(/^\| (.+?)（(.+?)） \| (.+?) \| (.+?) \|$/)
+      if (tableMatch) {
+        const name = tableMatch[1].trim()
+        const tag = tableMatch[2].trim()
+        cur = {
+          group,
+          sub: '',
+          name: `${name}（${tag}）`,
+          tag,
+          dna: tableMatch[3].trim(),
+          fit: tableMatch[4].trim(),
+          ref: '',
+          aiNative: true,
+        }
+        styles.push(cur)
+        continue
+      }
+    }
     const styleMatch = line.match(/^\*\*(.+?)\*\*\s*`([^`]*)`/)
     if (styleMatch) {
       const name = styleMatch[1].trim()
-      const aiNative = AI_NATIVE_NAMES.some((n) => name.includes(n))
-      cur = { group, sub, name, tag: styleMatch[2].trim(), dna: '', fit: '', ref: '', aiNative }
+      cur = { group, sub, name, tag: styleMatch[2].trim(), dna: '', fit: '', ref: '', aiNative: false }
       styles.push(cur)
       continue
     }
@@ -121,6 +133,7 @@ export function buildHuashuPrompt(
 }
 
 function huashuCarrier(group: string): string {
+  if (group.includes('AI 生图')) return 'AI 直出的视觉设计图'
   if (group.includes('网页')) return '网页 / 落地页'
   if (group.includes('PPT')) return '演示文稿页面'
   if (group.includes('信息图')) return '信息图'

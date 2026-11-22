@@ -2,7 +2,9 @@
 
 A browser-only AI image workbench: streaming generation, batch queue, local history, prompt templates, and a manga workspace. Images, history, settings, and API keys stay in the local IndexedDB.
 
-[Live demo](https://mxy2316868975javascript.github.io/workbench-image/?demo=1) · [Quick start](#quick-start) · [Third-party notices](THIRD_PARTY_NOTICES.md)
+Local demo: run `npm run dev` and open `http://localhost:5173/?demo=1`. After GitHub Pages is enabled, the same demo is available at `https://mxy2316868975javascript.github.io/workbench-image/?demo=1`.
+
+[Quick start](#quick-start) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 > Independent open-source project. Not affiliated with or endorsed by OpenAI.
 
@@ -28,7 +30,7 @@ cp .env.example .env.local   # optional: endpoint/model; do not put real keys he
 npm run dev                  # http://localhost:5173
 ```
 
-Open [`?demo=1`](https://mxy2316868975javascript.github.io/workbench-image/?demo=1) for a read-only demo with sample images; it never calls a real endpoint.
+Open `?demo=1` for a read-only demo with sample images; it never calls a real endpoint. The GitHub Pages URL becomes available after Pages is enabled and the workflow runs.
 
 ## Configuration
 

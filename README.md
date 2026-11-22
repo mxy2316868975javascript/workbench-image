@@ -6,7 +6,7 @@
 
 纯浏览器端的 AI 生图工作台：流式生成、批量队列、历史管理、提示词模板与漫画工作室。图片、历史、设置和 API Key 只写入本机 IndexedDB，没有后端存储。
 
-[在线演示](https://mxy2316868975javascript.github.io/workbench-image/?demo=1) · [快速开始](#快速开始) · [第三方来源与许可](THIRD_PARTY_NOTICES.md)
+本地演示：`npm run dev` 后打开 `http://localhost:5173/?demo=1` · [快速开始](#快速开始) · [第三方来源与许可](THIRD_PARTY_NOTICES.md)
 
 > 本项目是独立开源项目，与 OpenAI 无隶属或官方合作关系。
 
@@ -32,7 +32,7 @@
 
 ![内置模板库](docs/screenshots/templates.png)
 
-不配置 API Key 也可以打开 [`?demo=1`](https://mxy2316868975javascript.github.io/workbench-image/?demo=1) 查看示例任务与图片；演示模式不会调用真实端点。
+不配置 API Key 也可以打开 `?demo=1` 查看示例任务与图片；演示模式不会调用真实端点。GitHub Pages 部署完成后，同一参数可在 `https://mxy2316868975javascript.github.io/workbench-image/?demo=1` 使用。
 
 ## 功能
 
@@ -154,7 +154,7 @@ npm run build   # 输出 dist/
 
 `dist/` 是纯静态文件。部署到 Vercel / Netlify / Cloudflare Pages / GitHub Pages 时，默认的 `/api/relay/v1` 不可用，需要在设置面板改成支持 CORS 的端点，或自建转发层。
 
-GitHub Pages 演示由 `.github/workflows/pages.yml` 构建：设置仓库 Settings → Pages → Source 为 GitHub Actions，之后 push `main` 会部署 `?demo=1` 可用的只读演示。演示模式不读取任务与设置数据，也不调用真实 API；打开模板库时仍可能读取本地缓存或联网拉取。
+GitHub Pages 演示由 `.github/workflows/pages.yml` 构建：设置仓库 Settings → Pages → Source 为 GitHub Actions，之后 push `main` 会部署只读演示（`https://mxy2316868975javascript.github.io/workbench-image/?demo=1`）。演示模式不读取任务与设置数据，也不调用真实 API；打开模板库时仍可能读取本地缓存或联网拉取。
 
 ## 第三方来源与许可
 
