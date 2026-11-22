@@ -46,6 +46,7 @@ A browser-only AI image workbench: streaming generation, batch queue, local hist
 - **手绘风格配方库**：内置 [hand-drawn-styles](https://github.com/threerocks/hand-drawn-styles) 的 23 个编号手绘画风配方（儿童涂色、蜡笔童涂、吉卜力、水墨、像素、皮影…），首次使用拉取 STYLES.md + 选型指导并缓存；选画风 → 填【主体】【文字】→ 按 PROTOCOL 规则处理比例（纯风格不注入、1/4 号注入软结构提示、自选则用你的），产出中文配方 Prompt；3.1/19/20/22/23 号带原仓库正式生产工作流提示
 - **水仙提示词库**：内置 [shuixian-prompts](https://github.com/BaYue-SYJ/shuixian-prompts) 开源库的 6600+ 条中文生图提示词——首次使用从 GitHub 拉取（双源回退，约 14MB）并缓存到本地，之后离线可用；按分类 / 关键词检索，每条自动解析 `{argument}` 参数填空即用，附上游示例图
 - **GPT Image 2 精选画廊**：内置 [GPT-Image2-Skill](https://github.com/wuyoscar/GPT-Image2-Skill) 的 171 条编号案例（31 分类：动漫 / 游戏 / 海报 / 摄影 / 科研图表 / 信息图 / UI / 产品 / 建筑 / 时尚…）——按分类与关键词检索，每条含完整英文 Prompt、画幅与示例图，Prompt 可直接编辑后再填入，尺寸按原案例画幅自动联动；另附 19 条提示词工艺原则（精确文字引号、画布与版式前置、图表语法、编辑不变量等）供速查
+- **照片救援（LumaRescue）**：内置 [LumaRescue](https://github.com/justlovemaki/LumaRescue)——废片修复与美化：按题材（人像 / 风景 / 建筑 / 展品 / 产品 / 文档 / 老照片）套用不同保留规则，区分硬锚点（身份、文字、文物事实、建筑结构）与软锚点（光线 / 天空 / 背景 / 构图），光影优先并默认做大师级重构图；输出 AI 自然版 / AI 美化版两档图生图编辑 Prompt，老照片可只修复、克制的可信上色、现代干净修复或保留年代颗粒。原技能的 program_* 两版依赖本地确定性修图，工作台不覆盖
 - **侧栏管理**：左右侧栏均可一键收起/展开（宽度过渡动画），偏好写入 localStorage 刷新后保留；窄屏（<1024px）自动切换为「生成 / 看板」页签布局，多任务并行时所有进行中任务的卡片分区同屏显示（最近 6 个任务持续可见）
 - **数据管理**：设置面板内可清空数据库（删除全部任务与图片、保留设置与密钥），需输入「清空」二次确认
 - **持久化**：刷新或关闭页面后历史与图片原样保留；中断的任务在下次启动时标记为失败、可手动重试；顶栏显示 IndexedDB 存储用量
