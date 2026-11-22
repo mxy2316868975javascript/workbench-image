@@ -5,6 +5,7 @@
  */
 import { useSyncExternalStore } from 'react'
 import type {
+  ConnectionState,
   CustomTemplate,
   GenParams,
   ImageRecord,
@@ -14,8 +15,8 @@ import type {
   TaskRecord,
   StorageUsage,
 } from '../lib/types'
-import type { ShuixianCategory, ShuixianPrompt } from '../lib/shuixian'
 import {
+  cleanupRemovedLibraryCaches,
   clearAllData,
   deleteImage as dbDeleteImage,
   deleteTask as dbDeleteTask,
@@ -30,7 +31,10 @@ import {
   sweepStaleImages,
 } from '../lib/db'
 import { generateOne } from '../lib/generator'
-import { makeThumbBlob, uid } from '../lib/image-utils'
+import { downloadBlobAs, makeThumbBlob, uid } from '../lib/image-utils'
+import { createBackup, parseBackup, restoreBackup, type BackupCounts } from '../lib/backup'
+import { fetchModels } from '../lib/connection'
+import { createDemoState, DEMO_PROMPT, DEMO_SETTINGS, isDemoMode } from '../lib/demo'
 
 const LOG_RING_MAX = 3000
 const IMAGE_LOG_MAX = 500
@@ -98,6 +102,8 @@ export interface AppState {
   settingsOpen: boolean
   lightbox: { imageIds: string[]; index: number } | null
   storageUsage: StorageUsage | null
+  /** 端点连通性：启动/保存设置后探测，提交预检只做软提示 */
+  connection: ConnectionState
   prefill: { prompt: string; params: GenParams; refImages?: Blob[]; keepRefs?: boolean; nonce: number } | null
   logDrawer: 'collapsed' | 'open' | 'full'
   historyOpen: boolean
@@ -110,10 +116,16 @@ export interface AppState {
   narrowView: 'generate' | 'board'
   customTemplates: CustomTemplate[]
   templateDialogOpen: boolean
-  /** 水仙提示词库：按需拉取后缓存于 IndexedDB */
-  shuixian: { status: 'idle' | 'loading' | 'loaded' | 'error'; error?: string; prompts: ShuixianPrompt[]; categories: Record<string, ShuixianCategory> }
+  /** 只读演示模式（?demo=1）：不读写 IndexedDB，不调用真实端点 */
+  demo: boolean
   /** 删除类操作的统一确认请求（App 挂载 ConfirmDialog 渲染） */
   confirmRequest: { title: string; message: string; confirmText?: string; run: () => void | Promise<void> } | null
+}
+
+export interface SubmitTaskResult {
+  ok: boolean
+  taskId?: string
+  error?: string
 }
 
 interface Internal {
@@ -144,6 +156,7 @@ class Store {
       settingsOpen: false,
       lightbox: null,
       storageUsage: null,
+      connection: { status: 'unknown' },
       prefill: null,
       logDrawer: 'collapsed' as const,
       leftOpen: prefs.leftOpen,
@@ -154,7 +167,7 @@ class Store {
       confirmRequest: null,
       customTemplates: [],
       templateDialogOpen: false,
-      shuixian: { status: 'idle', prompts: [], categories: {} },
+      demo: isDemoMode(),
     }
   })()
 
@@ -187,11 +200,35 @@ class Store {
   }
 
   private async doInit() {
+    if (this.state.demo) {
+      const demo = createDemoState()
+      this.set({
+        settings: DEMO_SETTINGS,
+        settingsLoaded: true,
+        tasks: demo.tasks,
+        images: demo.images,
+        taskOrder: demo.taskOrder,
+        activeTaskId: 'demo-task-0',
+        storageUsage: { usage: 0, quota: 0 },
+        connection: { status: 'ok', models: ['gpt-image-1'], checkedAt: Date.now() },
+        prefill: {
+          prompt: DEMO_PROMPT,
+          params: { ...DEMO_SETTINGS.defaultParams },
+          keepRefs: true,
+          nonce: Date.now(),
+        },
+      })
+      this.log('info', '演示模式：示例数据，不读取任务/设置数据，也不会调用真实端点')
+      return
+    }
+
+    await cleanupRemovedLibraryCaches()
     const settings = await loadSettings()
     void this.loadCustomTemplates()
     const swept = await sweepStaleImages()
     await this.loadHistoryFromDB()
     this.set({ settings, settingsLoaded: true, storageUsage: await estimateStorage() })
+    void this.checkConnection()
     if (swept > 0) {
       this.log('warn', `启动清扫：${swept} 张上次会话遗留的图片标记为失败，可重试`)
     }
@@ -204,7 +241,7 @@ class Store {
     }
   }
 
-  private async loadHistoryFromDB() {
+  private async loadHistoryFromDB(reset = false) {
     // 读取任务 + 图片（内存只保留缩略图，完整 Blob 留在库里）
     const tasks = await listTasks(200)
     const images: Record<string, ImageRecord> = {}
@@ -217,10 +254,15 @@ class Store {
       }
     }
     this.set({
-      images: { ...this.state.images, ...images },
-      tasks: { ...this.state.tasks, ...taskMap },
+      images: reset ? images : { ...this.state.images, ...images },
+      tasks: reset ? taskMap : { ...this.state.tasks, ...taskMap },
       taskOrder: tasks.map((t) => t.id),
     })
+  }
+
+  /** 从 IndexedDB 重新加载历史；备份导入后需要 reset 覆盖旧内存 */
+  async refreshFromDB(options: { reset?: boolean } = {}) {
+    await this.loadHistoryFromDB(options.reset ?? false)
   }
 
   /* ---------------- 日志 ---------------- */
@@ -281,6 +323,10 @@ class Store {
 
   /** 清空数据库：删除全部任务与图片，保留设置；进行中的生成一并中止 */
   async clearDatabase() {
+    if (this.state.demo) {
+      this.log('warn', '演示模式不会修改本地数据')
+      return
+    }
     for (const c of this.internal.aborts.values()) c.abort()
     this.internal.aborts.clear()
     this.internal.queue = []
@@ -298,6 +344,45 @@ class Store {
     this.refreshStorage()
   }
 
+  /** 导出完整备份（含图片，不含 API Key） */
+  async exportBackup(): Promise<BackupCounts> {
+    if (this.state.demo) {
+      this.log('warn', '演示模式不会导出本地数据')
+      return { tasks: 0, images: 0, customTemplates: 0, mangaProjects: 0 }
+    }
+    const { blob, filename, counts } = await createBackup()
+    downloadBlobAs(blob, filename)
+    this.log(
+      'success',
+      `备份已导出：${counts.tasks} 个任务 / ${counts.images} 张图片 / ${counts.customTemplates} 个自定义模板`,
+    )
+    return counts
+  }
+
+  /** 导入备份：覆盖任务/图片/模板/漫画，合并非密钥设置，保留当前 Key */
+  async importBackup(file: File): Promise<BackupCounts> {
+    if (this.state.demo) throw new Error('演示模式不会修改本地数据')
+    const result = parseBackup(await file.text())
+    if (!result.ok) throw new Error(result.error)
+
+    const counts = await restoreBackup(result.backup)
+    await this.refreshFromDB({ reset: true })
+    await this.loadCustomTemplates()
+    const settings = await loadSettings()
+    this.set({
+      settings,
+      settingsLoaded: true,
+      connection: { status: 'unknown' },
+      storageUsage: await estimateStorage(),
+    })
+    void this.checkConnection(true)
+    this.log(
+      'success',
+      `备份已恢复：${counts.tasks} 个任务 / ${counts.images} 张图片 / ${counts.mangaProjects} 个漫画项目`,
+    )
+    return counts
+  }
+
   setLogFilterImageId(id: string | null) {
     this.set({ logFilterImageId: id })
   }
@@ -305,10 +390,45 @@ class Store {
   /* ---------------- 设置 ---------------- */
 
   async updateSettings(settings: Settings) {
+    if (this.state.demo) {
+      this.log('warn', '演示模式不会保存设置')
+      return
+    }
     await dbSaveSettings(settings)
-    this.set({ settings, settingsOpen: false })
+    this.set({ settings, settingsOpen: false, connection: { status: 'unknown' } })
     this.pump() // 并发数可能变化
     this.log('info', `设置已保存（并发=${settings.concurrency}，自动重试=${settings.autoRetry ? '开' : '关'}）`)
+    void this.checkConnection(true)
+  }
+
+  /** 端点连通性探测：60 秒内复用结果；只用于预检提示，不阻塞生成 */
+  private connectionProbeSeq = 0
+
+  async checkConnection(force = false) {
+    if (this.state.demo) return
+    const { settings, connection } = this.state
+    if (!settings.baseUrl.trim() || !settings.apiKey.trim() || !settings.model.trim()) {
+      this.connectionProbeSeq++ // 让在途探测失效
+      this.set({ connection: { status: 'unknown', checkedAt: Date.now() } })
+      return
+    }
+    if (!force && connection.checkedAt && Date.now() - connection.checkedAt < 60_000) return
+
+    const seq = ++this.connectionProbeSeq
+    const { baseUrl, apiKey } = settings
+    this.set({ connection: { ...connection, status: 'checking' } })
+    const probe = await fetchModels(baseUrl, apiKey)
+    // 只接受最后一次探测，且设置未被改过
+    if (seq !== this.connectionProbeSeq) return
+    if (this.state.settings.baseUrl !== baseUrl || this.state.settings.apiKey !== apiKey) return
+    this.set({
+      connection: {
+        status: probe.status,
+        checkedAt: Date.now(),
+        models: probe.models,
+        error: probe.message,
+      },
+    })
   }
 
   /** 拖拽调整并发：内存即时生效，持久化防抖 */
@@ -321,7 +441,13 @@ class Store {
     this.settingsPersistTimer = setTimeout(() => void dbSaveSettings(this.state.settings), 600)
   }
 
-  openSettings() { this.set({ settingsOpen: true }) }
+  openSettings() {
+    if (this.state.demo) {
+      this.log('warn', '演示模式不打开设置；请下载仓库后在本地配置端点')
+      return
+    }
+    this.set({ settingsOpen: true })
+  }
   closeSettings() { this.set({ settingsOpen: false }) }
 
   /* ---------------- 提示词模板 ---------------- */
@@ -345,7 +471,6 @@ class Store {
 
   openTemplateDialog() {
     this.set({ templateDialogOpen: true })
-    void this.hydrateShuixianFromCache()
   }
   closeTemplateDialog() { this.set({ templateDialogOpen: false }) }
 
@@ -355,56 +480,25 @@ class Store {
     this.set({ prefill: { prompt, params, keepRefs: true, nonce: Date.now() } })
   }
 
-  /* ---------------- 水仙提示词库 ---------------- */
-
-  /** 打开模板对话框时顺带从缓存预热（不发网络请求） */
-  async hydrateShuixianFromCache() {
-    if (this.state.shuixian.status !== 'idle') return
-    try {
-      const { getKV } = await import('../lib/db')
-      const cached = await getKV<{ prompts: ShuixianPrompt[]; categories: Record<string, ShuixianCategory> }>(
-        'shuixian-library',
-      )
-      if (cached?.prompts?.length) {
-        this.set({ shuixian: { status: 'loaded', prompts: cached.prompts, categories: cached.categories ?? {} } })
-      }
-    } catch {
-      /* 缓存读取失败不影响使用 */
-    }
-  }
-
-  /** 从 GitHub 拉取水仙提示词库并缓存（约 14MB，一次性） */
-  async loadShuixianLibrary() {
-    if (this.state.shuixian.status === 'loading' || this.state.shuixian.status === 'loaded') return
-    this.set({ shuixian: { ...this.state.shuixian, status: 'loading', error: undefined } })
-    try {
-      const { fetchShuixianLibrary } = await import('../lib/shuixian')
-      const { prompts, categories } = await fetchShuixianLibrary()
-      const { setKV } = await import('../lib/db')
-      await setKV('shuixian-library', { prompts, categories })
-      this.set({ shuixian: { status: 'loaded', prompts, categories } })
-      this.log('success', `水仙提示词库已加载并缓存：${prompts.length} 条`)
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      this.set({ shuixian: { ...this.state.shuixian, status: 'error', error: msg } })
-    }
-  }
-
   async refreshStorage() {
+    if (this.state.demo) return
     this.set({ storageUsage: await estimateStorage() })
   }
 
   /* ---------------- 提交与调度 ---------------- */
 
-  submitTask(prompt: string, params: GenParams, count: number, refImages?: Blob[]) {
+  submitTask(prompt: string, params: GenParams, count: number, refImages?: Blob[]): SubmitTaskResult {
+    if (this.state.demo) return { ok: false, error: '演示模式不会调用真实端点' }
     const trimmed = prompt.trim()
-    if (!trimmed) return
+    if (!trimmed) return { ok: false, error: '先输入提示词' }
+    const n = Math.min(10, Math.max(1, Math.round(count)))
     const refs = refImages?.length ? refImages : undefined
+    const model = this.state.settings.model
     const now = Date.now()
     const taskId = uid('t_')
     const imageIds: string[] = []
     const images = { ...this.state.images }
-    for (let i = 0; i < count; i++) {
+    for (let i = 0; i < n; i++) {
       const id = uid('i_')
       imageIds.push(id)
       images[id] = {
@@ -415,6 +509,7 @@ class Store {
         status: 'pending',
         progress: 0,
         phase: '排队中',
+        model,
         isEdit: !!refs,
         retryCount: 0,
         createdAt: now,
@@ -425,10 +520,11 @@ class Store {
       id: taskId,
       prompt: trimmed,
       params,
-      count,
+      count: n,
       status: 'running',
       createdAt: now,
       imageIds,
+      model,
       refImages: refs,
     }
     // 先更新内存，再持久化（图片含完整字段但无 Blob）
@@ -438,18 +534,47 @@ class Store {
       taskOrder: [taskId, ...this.state.taskOrder],
       activeTaskId: taskId,
     })
-    this.log('info', `提交任务：${count} 张图${refs ? '（图生图）' : ''}（并发上限 ${this.state.settings.concurrency}）·「${excerpt(trimmed, 24)}」`)
+    this.log('info', `提交任务：${n} 张图${refs ? '（图生图）' : ''}（模型 ${model}，并发上限 ${this.state.settings.concurrency}）·「${excerpt(trimmed, 24)}」`)
     // 窄屏下提交后自动切到看板，便于观察进度
     if (window.innerWidth < 1024) this.set({ narrowView: 'board' })
     // 先持久化，再入队，避免 pending/generating 写库乱序
     void (async () => {
-      await putTask(task)
-      for (const id of imageIds) {
-        if (this.state.images[id]) await putImage(this.state.images[id])
+      try {
+        await putTask(task)
+        for (const id of imageIds) {
+          const rec = this.state.images[id]
+          if (rec) await putImage(rec)
+        }
+        for (const id of imageIds) this.enqueueImage(id)
+        this.refreshStorage()
+      } catch (err) {
+        // 配额/隐私模式下首写失败：任务与图片直接置失败，避免永远停在排队中
+        const msg = err instanceof Error ? err.message : String(err)
+        this.log('error', `本地存储写入失败，任务未开始：${msg}`)
+        const nextImages = { ...this.state.images }
+        for (const id of imageIds) {
+          const rec = nextImages[id]
+          if (rec && rec.status === 'pending') {
+            nextImages[id] = {
+              ...rec,
+              status: 'failed',
+              phase: '失败',
+              error: `本地存储写入失败：${msg}`,
+              doneAt: Date.now(),
+            }
+          }
+        }
+        const current = this.state.tasks[taskId]
+        this.set({
+          images: nextImages,
+          tasks: current
+            ? { ...this.state.tasks, [taskId]: { ...current, status: 'failed', finishedAt: Date.now() } }
+            : this.state.tasks,
+        })
+        this.refreshStorage()
       }
-      for (const id of imageIds) this.enqueueImage(id)
-      this.refreshStorage()
     })()
+    return { ok: true, taskId }
   }
 
   private enqueueImage(imageId: string, attempt = 1) {

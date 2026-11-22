@@ -2,7 +2,7 @@
   "name": "image-workbench",
   "private": true,
   "version": "0.1.0",
-  "description": "纯浏览器端 AI 生图工作台：流式生图、批量队列、历史管理与内置提示词模板库，数据只存本机 IndexedDB。",
+  "description": "纯浏览器端 AI 生图工作台：文生图 / 图生图 / 批量生成 / 提示词模板 / 漫画工作室；数据只存本机 IndexedDB，支持自带 API Key（BYOK）。",
   "type": "module",
   "license": "MIT",
   "author": "Lemon (https://github.com/mxy2316868975javascript)",
@@ -17,13 +17,32 @@
   "keywords": [
     "ai",
     "image-generation",
+    "ai-image-generation",
     "gpt-image",
+    "text-to-image",
+    "image-to-image",
+    "image-editing",
     "openai",
     "prompt",
+    "prompt-engineering",
+    "prompt-templates",
+    "local-first",
+    "privacy-first",
+    "browser-only",
+    "byok",
+    "indexeddb",
+    "batch-generation",
+    "manga",
     "react",
     "vite",
-    "indexeddb",
-    "生图"
+    "typescript",
+    "生图",
+    "AI 生图",
+    "文生图",
+    "图生图",
+    "提示词模板",
+    "本地优先",
+    "数据隐私"
   ],
   "engines": {
     "node": ">=20.19.0"
@@ -32,7 +51,12 @@
     "dev": "node scripts/run-vite.cjs dev",
     "build": "tsc -b && node scripts/run-vite.cjs build",
     "preview": "node scripts/run-vite.cjs preview",
-    "typecheck": "tsc -b"
+    "typecheck": "tsc -b",
+    "lint": "eslint .",
+    "test": "node scripts/run-vitest.cjs run",
+    "test:watch": "node scripts/run-vitest.cjs",
+    "check:secrets": "node scripts/check-secrets.mjs src server scripts .github",
+    "check:dist": "node scripts/check-secrets.mjs dist"
   },
   "dependencies": {
     "dompurify": "^3.4.18",
@@ -43,13 +67,21 @@
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.3.5",
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^5.2.0",
+    "eslint": "^10.15.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.8",
+    "fake-indexeddb": "^6.2.8",
+    "globals": "^17.14.0",
     "tailwindcss": "^4.3.5",
-    "typescript": "^7.0.2",
-    "vite": "^7.3.8"
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.73.0",
+    "vite": "^7.3.8",
+    "vitest": "^5.1.1"
   }
 }

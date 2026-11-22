@@ -40,8 +40,9 @@ export interface WyGalleryData {
 
 export const WY_KV_KEY = 'wy-gallery'
 
-const REPO_RAW = 'https://raw.githubusercontent.com/wuyoscar/GPT-Image2-Skill/main/'
-const REPO_CDN = 'https://cdn.jsdelivr.net/gh/wuyoscar/GPT-Image2-Skill@main/'
+// 固定到 commit，避免上游 main 变动导致内容漂移
+const REPO_RAW = 'https://raw.githubusercontent.com/wuyoscar/GPT-Image2-Skill/8a1e114104a5c0eb4cdccaad21d90ba7819379a5/'
+const REPO_CDN = 'https://cdn.jsdelivr.net/gh/wuyoscar/GPT-Image2-Skill@8a1e114104a5c0eb4cdccaad21d90ba7819379a5/'
 const REF_DIR = 'skills/gpt-image/references/'
 
 /** 全部分类文件（顺序仅作兜底，实际按 Range 排序） */

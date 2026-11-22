@@ -11,6 +11,8 @@ export function MangaLightbox() {
   useEffect(() => {
     if (!lightbox) return
     const onKey = (e: KeyboardEvent) => {
+      // 有 Modal（如删除确认）在最上层时，把键盘让给它
+      if (document.querySelector('[role="dialog"]')) return
       if (e.key === 'Escape') mangaStore.closeLightbox()
       else if (e.key === 'ArrowLeft') mangaStore.lightboxNav(-1)
       else if (e.key === 'ArrowRight') mangaStore.lightboxNav(1)

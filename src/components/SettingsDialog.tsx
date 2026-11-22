@@ -1,8 +1,11 @@
 /** 设置对话框：端点 / 密钥 / 模型 / 默认参数 / 数据管理，全部仅存本浏览器 IndexedDB */
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Eye, EyeOff, PlugZap, Trash2 } from 'lucide-react'
+import { AlertTriangle, Download, Eye, EyeOff, PlugZap, Trash2, Upload } from 'lucide-react'
 import { store, useStore } from '../store/store'
 import { FALLBACK_SETTINGS } from '../lib/db'
+import { fetchModels } from '../lib/connection'
+import { parseBackup, type BackupCounts } from '../lib/backup'
+import { formatBytes } from '../lib/image-utils'
 import {
   BACKGROUND_OPTIONS,
   FORMAT_OPTIONS,
@@ -19,15 +22,24 @@ export function SettingsDialog() {
   const [draft, setDraft] = useState<Settings>(settings)
   const [showKey, setShowKey] = useState(false)
   const [test, setTest] = useState<TestState>({ status: 'idle' })
+  const [modelOptions, setModelOptions] = useState<string[]>([])
   const [clearOpen, setClearOpen] = useState(false)
   const [confirmText, setConfirmText] = useState('')
   const [clearing, setClearing] = useState(false)
+  const [backupBusy, setBackupBusy] = useState<'export' | 'import' | null>(null)
+  const [backupError, setBackupError] = useState('')
+  const [pendingImport, setPendingImport] = useState<{
+    file: File
+    counts: BackupCounts
+    size: number
+  } | null>(null)
 
   // 每次打开时同步当前设置
   useEffect(() => {
     if (settingsOpen) {
       setDraft(settings)
       setTest({ status: 'idle' })
+      setModelOptions([])
     }
   }, [settingsOpen, settings])
 
@@ -37,18 +49,66 @@ export function SettingsDialog() {
 
   const testConnection = async () => {
     setTest({ status: 'testing' })
-    try {
-      const base = draft.baseUrl.replace(/\/+$/, '')
-      const res = await fetch(`${base}/models`, {
-        headers: draft.apiKey ? { Authorization: `Bearer ${draft.apiKey}` } : undefined,
+    const probe = await fetchModels(draft.baseUrl, draft.apiKey)
+    if (probe.status === 'ok') {
+      setModelOptions(probe.models)
+      setTest({
+        status: 'ok',
+        message: probe.models.length ? `连接正常，可用模型：${probe.models.join('、')}` : '连接正常',
       })
-      if (!res.ok) throw new Error(`HTTP ${res.status}`)
-      const json = await res.json()
-      const ids: string[] = (json?.data ?? []).map((m: any) => m.id).filter(Boolean)
-      setTest({ status: 'ok', message: ids.length ? `连接正常，可用模型：${ids.join('、')}` : '连接正常' })
+      return
+    }
+    if (probe.status === 'unknown') {
+      setModelOptions([])
+      setTest({ status: 'ok', message: '连接正常，端点未提供模型列表，可手动填写模型名' })
+      return
+    }
+    setModelOptions([])
+    setTest({ status: 'error', message: `连接失败：${probe.message ?? '未知错误'}` })
+  }
+
+  const exportBackup = async () => {
+    setBackupError('')
+    setBackupBusy('export')
+    try {
+      await store.exportBackup()
     } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      setTest({ status: 'error', message: `连接失败：${msg}` })
+      setBackupError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBackupBusy(null)
+    }
+  }
+
+  const chooseBackup = async (file: File | undefined) => {
+    if (!file) return
+    setBackupError('')
+    setBackupBusy('import')
+    try {
+      const result = parseBackup(await file.text())
+      if (!result.ok) {
+        setBackupError(result.error)
+        return
+      }
+      setPendingImport({ file, counts: result.counts, size: file.size })
+    } catch (err) {
+      setBackupError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBackupBusy(null)
+    }
+  }
+
+  const confirmImport = async () => {
+    if (!pendingImport) return
+    setBackupError('')
+    setBackupBusy('import')
+    try {
+      await store.importBackup(pendingImport.file)
+      setPendingImport(null)
+      store.closeSettings()
+    } catch (err) {
+      setBackupError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setBackupBusy(null)
     }
   }
 
@@ -88,13 +148,19 @@ export function SettingsDialog() {
           </div>
         </Field>
 
-        <Field label="模型">
+        <Field label="模型" hint={modelOptions.length ? '可点选上次连接返回的模型' : undefined}>
           <input
             value={draft.model}
             onChange={(e) => setDraft({ ...draft, model: e.target.value })}
             placeholder="gpt-image-1"
+            list="model-options"
             className="h-9 w-full px-3 text-[13px]"
           />
+          <datalist id="model-options">
+            {modelOptions.map((id) => (
+              <option key={id} value={id} />
+            ))}
+          </datalist>
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
@@ -146,6 +212,53 @@ export function SettingsDialog() {
           </Button>
           {test.status === 'ok' && <span className="text-xs text-success">{test.message}</span>}
           {test.status === 'error' && <span className="text-xs text-danger break-all">{test.message}</span>}
+        </div>
+
+        {/* 数据备份 */}
+        <div className="border-t border-line pt-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 text-[11px] leading-5 text-ink-3">
+              <div className="text-[13px] font-medium text-ink">数据备份</div>
+              <div className="mt-0.5">
+                导出任务、图片、自定义模板、漫画项目和设置；不包含 API Key。
+              </div>
+              <div>导入会覆盖当前任务与图片，设置合并但保留当前密钥。</div>
+            </div>
+            <div className="flex shrink-0 flex-col gap-2">
+              <Button
+                variant="default"
+                size="sm"
+                disabled={backupBusy !== null}
+                onClick={() => void exportBackup()}
+              >
+                <Download className="h-3.5 w-3.5" />
+                {backupBusy === 'export' ? '导出中…' : '导出备份'}
+              </Button>
+              <label
+                className={`flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-md border border-line px-2 text-xs text-ink-2 transition-colors hover:bg-hover ${
+                  backupBusy ? 'pointer-events-none opacity-50' : ''
+                }`}
+              >
+                <Upload className="h-3.5 w-3.5" />
+                {backupBusy === 'import' ? '读取中…' : '导入备份'}
+                <input
+                  type="file"
+                  accept=".json,application/json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    e.currentTarget.value = ''
+                    void chooseBackup(file)
+                  }}
+                />
+              </label>
+            </div>
+          </div>
+          {backupError && (
+            <div className="mt-2 rounded-lg bg-danger-soft px-3 py-2 text-xs leading-relaxed text-danger">
+              {backupError}
+            </div>
+          )}
         </div>
 
         {/* 数据管理 */}
@@ -227,6 +340,47 @@ export function SettingsDialog() {
           </Button>
         </div>
       </div>
+      </Modal>
+
+      {/* 导入备份二次确认 */}
+      <Modal
+        open={!!pendingImport}
+        onClose={() => setPendingImport(null)}
+        title="确认导入备份"
+        width="max-w-md"
+      >
+        {pendingImport && (
+          <div className="space-y-3">
+            <div className="flex gap-2 rounded-lg bg-warn-soft px-3 py-2.5 text-xs leading-relaxed text-warn">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>
+                将覆盖当前全部任务、图片、自定义模板和漫画项目；设置会合并，但 API Key 保留当前浏览器里的值。
+                此操作不可撤销。
+              </span>
+            </div>
+            <div className="rounded-lg border border-line px-3 py-2 text-xs leading-relaxed text-ink-2">
+              备份包含：{pendingImport.counts.tasks} 个任务 / {pendingImport.counts.images} 张图片 /{' '}
+              {pendingImport.counts.customTemplates} 个自定义模板 / {pendingImport.counts.mangaProjects} 个漫画项目
+              <div className="mt-1 text-ink-3">文件大小：{formatBytes(pendingImport.size)}</div>
+            </div>
+            {backupError && (
+              <div className="rounded-lg bg-danger-soft px-3 py-2 text-xs leading-relaxed text-danger">
+                {backupError}
+              </div>
+            )}
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" onClick={() => setPendingImport(null)}>取消</Button>
+              <Button
+                variant="primary"
+                disabled={backupBusy === 'import'}
+                onClick={() => void confirmImport()}
+              >
+                <Upload className="h-3.5 w-3.5" />
+                {backupBusy === 'import' ? '导入中…' : '确认导入'}
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
     </>
   )

@@ -1,166 +1,189 @@
-# 生图工作台 · Image Workbench
+# AI 生图工作台 · Image Workbench
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/mxy2316868975javascript/workbench-image/actions/workflows/ci.yml/badge.svg)](https://github.com/mxy2316868975javascript/workbench-image/actions/workflows/ci.yml)
 [![Node](https://img.shields.io/badge/node-%3E%3D20.19-339933?logo=node.js&logoColor=white)](package.json)
 
-纯浏览器端的 AI 生图工作台：所有数据（图片、历史、设置、密钥）只存本机 IndexedDB，**没有任何后端存储**。
+纯浏览器端的 AI 生图工作台：支持文生图、图生图、批量生成、提示词模板与漫画工作室。图片、历史、设置和 API Key 只写入本机 IndexedDB，数据只存本机，自带 API Key（BYOK），没有后端存储。
 
-A browser-only AI image workbench: streaming generation, batch queue, local history, and a large built-in prompt-template library. Images, settings and API keys never leave the browser.
+本地演示：`npm run dev` 后打开 `http://localhost:5173/?demo=1` · [English](README.en.md) · [快速开始](#快速开始) · [第三方来源与许可](THIRD_PARTY_NOTICES.md)
+
+> 本项目是独立开源项目，与 OpenAI 无隶属或官方合作关系。
+
+## 目录
+
+- [界面截图](#界面截图)
+- [功能](#功能)
+- [快速开始](#快速开始)
+- [配置](#配置)
+- [数据与隐私](#数据与隐私)
+- [备份与恢复](#备份与恢复)
+- [部署](#部署)
+- [第三方来源与许可](#第三方来源与许可)
+- [已知限制](#已知限制)
+- [关键词 / Keywords](#关键词--keywords)
+- [贡献](#贡献)
+- [许可](#许可)
 
 ## 界面截图
 
 | 深色主题 | 浅色主题 |
 | --- | --- |
-| ![深色主题](docs/screenshots/main-dark.png) | ![浅色主题](docs/screenshots/main-light.png) |
+| ![AI 生图工作台深色主题](docs/screenshots/main-dark.png) | ![AI 生图工作台浅色主题](docs/screenshots/main-light.png) |
 
-![内置模板库](docs/screenshots/templates.png)
+![AI 生图提示词模板库](docs/screenshots/templates.png)
+
+不配置 API Key 也可以打开 `?demo=1` 查看示例任务与图片；演示模式不会调用真实端点。GitHub Pages 部署完成后，同一参数可在 `https://mxy2316868975javascript.github.io/workbench-image/?demo=1` 使用。
 
 ## 功能
 
-- **流式输出**：`stream: true` 直连端点，SSE 逐事件解析，进度块实时写入日志控制台
-- **百分比进度**：每张卡片独立的百分比 + 进度条（时间渐近曲线 + SSE chunk 到包修正），批量任务有整批均值进度
-- **日志流**：底部可展开/全屏的日志抽屉，时间戳、级别着色、按单张图片过滤、自动滚动、复制
-- **批量生图**：1–10 张，全局并发数可调（1–6），队列自动调度、槽位复用，整批取消 / 失败重试
-- **图生图**：参考图走 `/images/edits`（multipart），支持点击选择 / 拖拽 / 剪贴板粘贴添加（最多 4 张），任务与历史记录带「图生图」标识，重新生成时参考图一并还原
-- **历史记录**：按任务分组，增删改查齐全——查看/复制/编辑旧提示词、一键回填生成面板、重新生成、删除单图与整任务（级联）；支持任务与图片的**批量删除**（多选模式）
-- **删除确认**：所有删除操作（单图 / 整任务 / 批量 / 灯箱内删除）统一弹出确认框；清空数据库需输入「清空」二次确认
-- **预览**：灯箱全尺寸预览（从 IndexedDB 取原 Blob），滚轮缩放、拖拽平移、上下张切换、下载、复制提示词、元信息（耗时 / tokens / 改写后提示词）
-- **双主题**：深色 / 浅色 / 跟随系统
-- **提示词模板**：内置「跨境电商详情页 / 主图（ecom-pdp）」模板（来自 [1click-ecom-detailpage](https://github.com/coolqoo/1click-ecom-detailpage) 技能）——填产品 / 渠道 / 转化驱动力 / 卖点等字段，实时预览英文 Prompt（Campaign Style Lock + Frame objective + 图内文案门），主图 5 种 / 详情页 10 种图片类型，详情页自动联动 1024×1536；支持新建自定义模板（`{{key}}` 占位正文 + 字段定义），模板存 IndexedDB
-- **vane 玩法合集**：内置 [vane-gpt-image-skills](https://github.com/VaneAi888/vane-gpt-image-skills) 的 5 种玩法，动态表单按玩法切换——多画风表情包（12 画风 × 6 主题，需参考图）、电影级海报（36 版式，片名原样保留、竖版 2:3）、书页里的电影（剧透开关）、宠物新年写真（3 种影棚）、微信红包封面（36 风格，3:4 安全区构图），按各技能规则产出中文 Prompt
-- **电商执行卡（视觉文案 SOP）**：内置 [ecommerce-visual-copywriting-skill](https://github.com/feichanggege/ecommerce-visual-copywriting-skill) 的电商视觉策划 SOP——6 种图片任务（KV1 商品识别 / 卖点翻译 / 证据信任 / 对比 / 场景 / 规格 CTA）、KV1 先识别后卖点的规则、主图标题 ≤12 字与副文案 ≤18 字自动计数、留白排版 / 模型出字两种文字渲染、证据账本与广告法合规提示，产出十行执行卡 + 自包含生图 Prompt
-- **文档配图（三风格）**：内置 [Document-illustrator-skill](https://github.com/op7418/Document-illustrator-skill)（歸藏）——文档内容归纳成系列配图：渐变玻璃卡片（Keynote 极简 + 玻璃拟态 + 3D 锚点物）、数字极简票券（黑白登机牌结构）、扁平矢量插画（复古柔和全景）三种风格，16:9 / 3:4 双比例，支持封面图模式
-- **cc2image 模板大全**：内置 [awesome-gpt-image-2](https://github.com/freestylefly/awesome-gpt-image-2) 的 13 分类 46 模板（UI / 信息图 / 海报 / 电商 / 品牌 / 建筑 / 摄影 / 插画 / 角色 / 场景 / 古风 / 出版物…），含常规模板与 JSON 进阶模板，编辑 `[]` 占位符即出 Prompt，按需拉取缓存
-- **Gorden 图片型 PPT**：内置 [GordenSuperPPTSkills](https://github.com/GordenSun/GordenSuperPPTSkills) 的 GordenImagePPTGen——单页高密度豪华信息图：七段式稳定结构（标题/核心逻辑/视觉框架/视觉生成提示/详细内容/图标/背景纹理）、19 种视觉框架（莫比乌斯环、Bento 看板、同心圆雷达、鱼骨图…）、9 种风格库，页面文字逐字照排、数据零编造；后续可用同仓库 GordenImage2PPTX 转可编辑 PPTX
-- **归藏社交卡片**：内置 [guizang-social-card-skill](https://github.com/op7418/guizang-social-card-skill)（歸藏）——Editorial Magazine × E-ink 与 Swiss International 两种视觉模式、10 套主题色板、28 种版式——小红书 3:4 轮播图文与公众号 21:9 / 1:1 封面，按风格身份测试与内容密度规则产出设计卡 Prompt
-- **菜谱海报**：内置 [recipe-generator](https://github.com/cclank/recipe-generator) 的米其林级菜谱海报——现代写实风（横版教程海报）、传统海报风（竖版 2:3 收藏海报）、文人卷轴风（横版文字卷轴）三种风格；竖版可填食材 / 技法 / 风味 / 时间填入 RECIPE CONTENT HIGHLIGHTS
-- **PPT 逐页生图**：内置 [codex-ppt-skill](https://github.com/Ronnie2025/codex-ppt-skill) 路径 A——中文 toB 商业汇报的整页生图：全局风格块（主色/辅助色/强调色）+ 逐页提示词（页面标题/目标/核心要点/版式结构/视觉元素/Logo 规则/负向约束），13 种常用版式（风险升级、优先级矩阵、闭环飞轮、路线图…），16:9 横版按页生成
-- **电商场景模板库**：内置 [ecom-details-image](https://github.com/liangdabiao/ecom-details-image) 的 25 个电商场景模板（白底主图 / 场景图 / 平铺图 / UGC / 直播 / 拆解图…），按 GPT-Image 铁律自动注入——颜色 hex 码、产品占比黄金区间、留白显式声明、平台预留空间、三层信息架构、否定清单；支持命名变体（奢华 / 清新 / 科技）与三层文字（核心承诺 / 证据 / CTA）
-- **科研图表示意版**：内置 [vivid-illustration-skill](https://github.com/yjz211/vivid-illustration-skill) 的 148 个数据图配方（比较 / 趋势 / 分布 / 矩阵 / 组合…），按标签与关键词检索，附上游示例图；填数据产出**示意版**图表生图 Prompt——明确标注数值与文字为 AI 近似渲染，精确科研图请用原仓库 matplotlib 源码
-- **小黑怪诞正文配图**：内置 [ian-xiaohei-illustrations](https://github.com/helloianneo/ian-xiaohei-illustrations)（Ian 小黑 IP）——中文文章的怪诞正文配图：固定 IP 角色小黑（黑色实心、白点眼、认真做荒诞的事）+ 纯白手绘线稿 + 红橙蓝中文手写批注 + 大量留白，8 种结构类型（Workflow / 前后对比 / 概念隐喻…），英文 Prompt 内置风格 DNA 与小黑 IP 定义
-- **花叔 Design 风格库**：内置 [huashu-design](https://github.com/alchaincyf/huashu-design) 的 92 种设计风格（网页 20 / PPT 20 / 信息图 20 / App 12 / 中文东亚 12 / 小红书 8）+ 9 款 AI 生图专用风格——按官方「Mood, Not Layout」生图心法产出短提示词：选风格 → 描述情绪与观众感受，不堆布局；含视觉 DNA / 参考美学 / 适配场景
-- **极简 Zine 海报**：内置 [gc-minimal-zine-poster](https://github.com/LiamGvchi/gc-minimal-zine-poster)——诗性纸感留白微编辑海报，70-90% 留白 + 单一高饱和色 + 纸张纹理，10 种布局家族 × 10 种焦点形态 × 9 种材质 × 10 种情绪；按 Prompt Compiler 四段式结构组装
-- **论文方法图解**：内置 [paper-craft-skills](https://github.com/zsyggg/paper-craft-skills) 的 paper-comic——论文核心方法的视觉图解：sketchnote 温暖手抄报 / paper-figure 论文框架图两种风格，竖版 2:3 与横版，内置构图原则、文字标注规范（术语英文 / 解释中文）与颜色限制；论文漫画系列可按范围逐页生成
-- **cc2image 内容配图**：内置 [cc2image](https://github.com/izscc/cc2image) 的封面 / 正文 / logo 三种模式——49 套中文内容视觉风格（手绘知识风、典籍山水风、霓虹搜索风…）+ 8 套图标风格，统一「中文知识博主手绘图解」视觉锚点，封面 21:9 / 正文 16:9 / logo 1:1 按意图适配画幅
-- **手绘风格配方库**：内置 [hand-drawn-styles](https://github.com/threerocks/hand-drawn-styles) 的 23 个编号手绘画风配方（儿童涂色、蜡笔童涂、吉卜力、水墨、像素、皮影…），首次使用拉取 STYLES.md + 选型指导并缓存；选画风 → 填【主体】【文字】→ 按 PROTOCOL 规则处理比例（纯风格不注入、1/4 号注入软结构提示、自选则用你的），产出中文配方 Prompt；3.1/19/20/22/23 号带原仓库正式生产工作流提示
-- **水仙提示词库**：内置 [shuixian-prompts](https://github.com/BaYue-SYJ/shuixian-prompts) 开源库的 6600+ 条中文生图提示词——首次使用从 GitHub 拉取（双源回退，约 14MB）并缓存到本地，之后离线可用；按分类 / 关键词检索，每条自动解析 `{argument}` 参数填空即用，附上游示例图
-- **GPT Image 2 精选画廊**：内置 [GPT-Image2-Skill](https://github.com/wuyoscar/GPT-Image2-Skill) 的 171 条编号案例（31 分类：动漫 / 游戏 / 海报 / 摄影 / 科研图表 / 信息图 / UI / 产品 / 建筑 / 时尚…）——按分类与关键词检索，每条含完整英文 Prompt、画幅与示例图，Prompt 可直接编辑后再填入，尺寸按原案例画幅自动联动；另附 19 条提示词工艺原则（精确文字引号、画布与版式前置、图表语法、编辑不变量等）供速查
-- **照片救援（LumaRescue）**：内置 [LumaRescue](https://github.com/justlovemaki/LumaRescue)——废片修复与美化：按题材（人像 / 风景 / 建筑 / 展品 / 产品 / 文档 / 老照片）套用不同保留规则，区分硬锚点（身份、文字、文物事实、建筑结构）与软锚点（光线 / 天空 / 背景 / 构图），光影优先并默认做大师级重构图；输出 AI 自然版 / AI 美化版两档图生图编辑 Prompt，老照片可只修复、克制的可信上色、现代干净修复或保留年代颗粒。原技能的 program_* 两版依赖本地确定性修图，工作台不覆盖
-- **侧栏管理**：左右侧栏均可一键收起/展开（宽度过渡动画），偏好写入 localStorage 刷新后保留；窄屏（<1024px）自动切换为「生成 / 看板」页签布局，多任务并行时所有进行中任务的卡片分区同屏显示（最近 6 个任务持续可见）
-- **数据管理**：设置面板内可清空数据库（删除全部任务与图片、保留设置与密钥），需输入「清空」二次确认
-- **持久化**：刷新或关闭页面后历史与图片原样保留；中断的任务在下次启动时标记为失败、可手动重试；顶栏显示 IndexedDB 存储用量
+### 生成
 
-## 环境要求
+- **流式输出**：`stream: true` 直连兼容 OpenAI 协议的端点，SSE 逐事件解析，进度块实时写入日志控制台。
+- **批量生图**：1–10 张，全局并发数 1–6，队列自动调度、槽位复用，整批取消与失败重试。
+- **图生图**：参考图走 `/images/edits`（multipart），支持点击选择、拖拽、剪贴板粘贴，最多 4 张；任务与历史记录带「图生图」标识，重新生成时参考图一并还原。
+- **百分比进度**：每张卡片独立的百分比与进度条（时间渐近曲线 + SSE chunk 修正），批量任务显示整批均值。
+- **提交预检**：提交前检查端点、Key、模型、透明背景与 JPEG 冲突、参考图数量/类型/体积，给出张数、预计时长与排队位置；中文输入法组合中不会误触 ⌘Enter。
+- **草稿恢复**：左栏输入自动保存，文字镜像到 localStorage，参考图存 IndexedDB；刷新或重开浏览器后恢复并提示，支持一键清空与 5 秒撤销。
+- **日志流**：底部可展开/全屏的日志抽屉，时间戳、级别着色、按单张图片过滤、自动滚动、复制。
 
-- Node.js >= 20.19（推荐 22 LTS）
-- npm 10+
-- 较新的 Chrome / Edge / Safari / Firefox
+### 历史与预览
+
+- **历史记录**：按任务分组，查看、复制、编辑旧提示词、回填生成面板、重新生成、删除单图与整任务（级联），支持任务与图片批量删除。
+- **灯箱预览**：从 IndexedDB 取原 Blob，滚轮缩放、拖拽平移、上下张切换、下载、复制提示词、元信息（耗时 / tokens / 改写后提示词）。
+- **删除确认**：单图、整任务、批量删除与灯箱内删除统一确认；清空数据库需输入「清空」二次确认。
+- **持久化**：刷新或关闭页面后历史与图片保留；中断的任务下次启动标记为失败，可手动重试；顶栏显示 IndexedDB 存储用量。
+
+### 提示词模板与风格库
+
+所有模板都从「模板」入口打开；运行时库首次使用时才联网拉取并缓存到本机。
+
+- **跨境电商详情页 / 主图（ecom-pdp）**：来自 [1click-ecom-detailpage](https://github.com/coolqoo/1click-ecom-detailpage)，按产品 / 渠道 / 转化驱动力 / 卖点生成英文 Prompt，主图 5 种、详情页 10 种图片类型。
+- **vane 玩法合集**：来自 [vane-gpt-image-skills](https://github.com/VaneAi888/vane-gpt-image-skills)，5 种玩法：表情包、电影海报、书页里的电影、宠物写真、微信红包封面。
+- **电商执行卡（视觉文案 SOP）**：来自 [ecommerce-visual-copywriting-skill](https://github.com/feichanggege/ecommerce-visual-copywriting-skill)，6 种图片任务、KV1 规则、标题/副文案字数检查、证据账本与广告法提示。
+- **文档配图（三风格）**：来自 [Document-illustrator-skill](https://github.com/op7418/Document-illustrator-skill)，渐变玻璃卡片、数字极简票券、扁平矢量插画。
+- **cc2image 模板大全**：来自 [awesome-gpt-image-2](https://github.com/freestylefly/awesome-gpt-image-2)，13 分类 46 模板，编辑 `[]` 占位符即出 Prompt；按需拉取。
+- **Gorden 图片型 PPT**：来自 [GordenSuperPPTSkills](https://github.com/GordenSun/GordenSuperPPTSkills)，七段式信息图结构、19 种视觉框架、9 种风格库；按上游要求保留署名。
+- **PPT 逐页生图**：来自 [codex-ppt-skill](https://github.com/Ronnie2025/codex-ppt-skill)，全局风格块 + 逐页提示词，13 种版式。
+- **cc2image 内容配图**：来自 [cc2image](https://github.com/izscc/cc2image)，封面 / 正文 / logo 三种模式，49 套中文内容风格 + 8 套图标风格。
+- **小黑怪诞正文配图**：来自 [ian-xiaohei-illustrations](https://github.com/helloianneo/ian-xiaohei-illustrations)，固定 IP 角色 + 手绘线稿 + 红橙蓝批注。
+- **花叔 Design 风格库**：来自 [huashu-design](https://github.com/alchaincyf/huashu-design)，92 种设计风格 + 9 款 AI 生图风格，按「Mood, Not Layout」产出短 Prompt；按需拉取。
+- **极简 Zine 海报**：来自 [gc-minimal-zine-poster](https://github.com/LiamGvchi/gc-minimal-zine-poster)，纸感留白与单一高饱和色。
+- **论文方法图解**：来自 [paper-craft-skills](https://github.com/zsyggg/paper-craft-skills)，sketchnote 与 paper-figure 两种风格。
+- **手绘风格配方库**：来自 [hand-drawn-styles](https://github.com/threerocks/hand-drawn-styles)，23 个编号画风配方；按需拉取。
+- **GPT Image 2 精选画廊**：来自 [GPT-Image2-Skill](https://github.com/wuyoscar/GPT-Image2-Skill)，171 条编号案例 + 提示词工艺原则；按需拉取。
+- **自定义模板**：正文用 `{{key}}` 占位 + 字段定义，模板存 IndexedDB。
+
+### 漫画工作室
+
+- **角色设定**：描述 + 参考图生成角色六宫格设定表，作为后续分镜的一致性参考。
+- **AI 剧本与分镜**：文本端点与生图端点解耦，脚本、分镜、逐格生图、导出。
+- **独立设置**：漫画文本端点、Key、模型单独保存，不混用生图配置。
+
+### 界面
+
+- 深色 / 浅色 / 跟随系统三档主题。
+- 左右侧栏一键收起/展开，宽度过渡动画，偏好写入 localStorage。
+- 窄屏（<1024px）自动切换「生成 / 看板」页签；多任务并行时最近 6 个任务持续可见。
 
 ## 快速开始
 
+环境要求：Node.js >= 20.19（推荐 22 LTS）、npm 10+、较新的 Chrome / Edge / Safari / Firefox。
+
 ```bash
 npm ci
-cp .env.example .env.local   # 可选：填写端点与模型
+cp .env.example .env.local   # 可选：填写端点与模型；不要写真实 Key
 npm run dev                  # http://localhost:5173
 ```
 
 首次打开若未配置端点或密钥，会自动弹出设置面板。所有配置（含密钥）只存本浏览器 IndexedDB。
+
+常用命令：
+
+```bash
+npm run lint       # ESLint
+npm test           # Vitest
+npm run typecheck  # tsc
+npm run build      # 类型检查 + 生产构建
+npm run preview    # 本地预览 dist
+```
+
+## 配置
 
 ### 环境变量
 
 | 变量 | 作用 | 默认值 |
 | --- | --- | --- |
 | `VITE_DEFAULT_BASE_URL` | 生图端点 Base URL | `/api/relay/v1` |
-| `VITE_DEFAULT_API_KEY` | 生图密钥 | 空 |
+| `VITE_DEFAULT_API_KEY` | 生图密钥（仅 dev 生效） | 空 |
 | `VITE_DEFAULT_MODEL` | 生图模型 | `gpt-image-1` |
 | `VITE_TEXT_BASE_URL` | 文本端点（漫画脚本 / 分镜） | `/api/relay/v1` |
-| `VITE_TEXT_API_KEY` | 文本密钥 | 空 |
+| `VITE_TEXT_API_KEY` | 文本密钥（仅 dev 生效） | 空 |
 | `VITE_TEXT_MODEL` | 文本模型 | `gpt-4o-mini` |
 | `RELAY_TARGET` | 内置 relay 的上游地址（仅 dev / preview） | `https://api.openai.com` |
 
-> **密钥安全**：`VITE_*` 变量会被 Vite 打包进前端产物，等同于公开信息。真实密钥建议启动后在设置面板填写（只存 IndexedDB），不要写进 `.env.local` 后再公开发布构建产物。
+**密钥安全**：`VITE_*` 会被 Vite 打包进前端产物，等同于公开信息。生产构建检测到名称像密钥的 `VITE_*` 非空会直接失败；真实 Key 请在应用「设置」面板填写，只存 IndexedDB。开发环境可以用 `.env.local`，但不要提交。
 
-## 两个关键的基础设施说明
+### 内置 relay
 
-### 1. `/api/relay` 转发（仅转发，零存储）
+部分上游不返回 CORS 头，浏览器无法直连。`server/relay-middleware.ts` 在 dev/preview 进程内用 `node:http2` 直连上游并逐字节 pipe，只转发、不存储。relay 只接受本机回环请求（`127.0.0.1` / `::1`），并校验 Host / Origin；不要用 `--host 0.0.0.0` 把 preview 暴露到局域网或公网。
 
-部分上游端点不返回 CORS 头，浏览器无法直连。开发/预览服务器内置了一个转发中间件
-（`server/relay-middleware.ts`）：
+生产静态部署没有 relay，需要把设置里的 Base URL 换成支持 CORS 的端点，或自行托管带访问控制的转发层。
 
-- 上游地址由 `RELAY_TARGET` 指定，默认 `https://api.openai.com`
-- 中间件用 **node:http2** 直连上游并逐字节 pipe——部分端点的 SSE 只在 HTTP/2 上即时推送，
-  h1.1 下边缘节点不 flush（Vite 内置 proxy 只支持 h1.1 上游，会收不到流）
-- 中间件只转发请求，不存储任何数据；图片字节由前端下载后写入 IndexedDB
+## 数据与隐私
 
-### 2. `scripts/run-vite.cjs` 本地 node 副本（macOS 签名问题）
+- 图片、历史、设置、API Key 只写入当前浏览器的 IndexedDB；没有账号、没有后端数据库、没有遥测。
+- 生成时，提示词与参考图会发送到你配置的模型端点；这是生图本身必需的网络请求。
+- 部分模板库在首次点击加载时会访问 GitHub Raw / jsDelivr，只拉取模板文本与示例图地址，不上传你的提示词或图片。
+- API Key 在 IndexedDB 中不加密。任何能执行脚本的 XSS、恶意浏览器扩展或有权限的本地用户都可能读到它；建议使用限额、可随时吊销的 Key。
+- 换浏览器、清理站点数据或使用隐私模式会导致本地数据不可用；需要迁移时请用「设置 → 数据备份」。
 
-官方 Node 发行版带 hardened runtime 签名，macOS 的库验证（Library Validation）会拒绝加载
-签名不一致的原生模块（rollup / tailwind oxide 的 `.node` 文件），报
-`mapping process and mapped file (non-platform) have different Team IDs`。
+## 备份与恢复
 
-`npm run dev / build / preview` 通过 `scripts/run-vite.cjs` 启动 vite。在 **macOS** 上脚本会先复制当前
-node 到 `.node-local/` 并做 ad-hoc 重签名（去掉硬化标志），用它启动 vite——进程与原生库都是 ad-hoc，
-dlopen 即可正常工作；该目录已加入 `.gitignore`。Linux / Windows 或没有 `codesign` 的环境直接使用系统
-node，不做复制，因此同一脚本可直接用于 CI。
+设置面板提供「导出备份 / 导入备份」：
 
-## 生产构建
+- 导出内容：全部任务、图片、自定义模板、漫画项目、生图设置和漫画设置。
+- 默认排除：两个 API Key、模板库缓存、左栏草稿。
+- 图片以 base64 写入单个 JSON，文件会比原始图片大约 33%；图片很多时建议分批或先清理历史。
+- 导入会覆盖当前任务、图片、自定义模板和漫画项目；设置合并，但保留当前浏览器里的 Key。导入前会显示数量并二次确认。
+
+## 部署
 
 ```bash
-npm run build      # tsc 类型检查 + vite build → dist/
-npm run preview    # 本地预览 dist（同样带 relay 与本地 node 逻辑）
+npm run build   # 输出 dist/
 ```
 
-产物为纯静态文件。注意：静态部署时没有 relay 中间件，需要把设置里的 Base URL 换成
-支持 CORS 的端点，或自行托管一个转发层。
+`dist/` 是纯静态文件。部署到 Vercel / Netlify / Cloudflare Pages / GitHub Pages 时，默认的 `/api/relay/v1` 不可用，需要在设置面板改成支持 CORS 的端点，或自建转发层。
 
-## 目录结构
+GitHub Pages 演示由 `.github/workflows/pages.yml` 构建：设置仓库 Settings → Pages → Source 为 GitHub Actions，之后 push `main` 会部署只读演示（`https://mxy2316868975javascript.github.io/workbench-image/?demo=1`）。演示模式不读取任务与设置数据，也不调用真实 API；打开模板库时仍可能读取本地缓存或联网拉取。
 
-```
-src/
-├── lib/                  # 纯逻辑：类型 / IndexedDB / SSE / 进度 / 生成器 / 模板数据
-├── store/                # 全局 store（useSyncExternalStore）+ 并发队列
-├── theme/                # 深浅主题
-└── components/           # 界面组件；漫画工作室在 components/manga/
-server/relay-middleware.ts # HTTP/2 SSE 转发中间件（dev / preview）
-scripts/run-vite.cjs      # vite 启动器（macOS 签名兼容层）
-docs/screenshots/         # README 截图
-```
+## 第三方来源与许可
 
-## 事件格式兼容
+本项目代码以 [MIT](LICENSE) 发布。`src/lib/` 中整理或运行时加载的第三方提示词、模板、风格库与示例数据版权归各上游作者所有，按 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 列出的许可使用，不适用本项目的 MIT 许可。
 
-`generator.ts` 同时兼容两类端点行为，切换端点无需改代码：
+- 运行时按需加载：`awesome-gpt-image-2`、`GPT-Image2-Skill`、`hand-drawn-styles`、`huashu-design`（均 MIT，URL 固定到 commit）。
+- 代码内嵌模板：`1click-ecom-detailpage`、`vane-gpt-image-skills`、`cc2image`、`codex-ppt-skill`、`GordenSuperPPTSkills`、`ecommerce-visual-copywriting-skill`、`Document-illustrator-skill`、`paper-craft-skills`、`ian-xiaohei-illustrations`、`gc-minimal-zine-poster`。
+- 早期版本中出现过的 AGPL / 非商业 / 无许可内容已移除，不再随本仓库分发；详见 NOTICES 的「已移除的内容」。
 
-| 行为 | 标准 OpenAI（gpt-image-1 等） | 本端点（代理） |
-|---|---|---|
-| 事件风格 | `image_generation.partial_image` / `completed`（b64） | `image.generation.chunk`（无内容进度块）+ `image.generation.result`（data[].url） |
-| 结果形态 | b64_json | url（前端经 relay 下载后落库） |
-| 进度字段 | 无 | 无（由 ProgressEstimator 估算） |
-| 图生图 | `/images/edits` multipart（image / image[]） | 同格式，已实测可用 |
+新增第三方内容前请先看 [CONTRIBUTING.md](CONTRIBUTING.md) 的许可规则：没有明确许可的内容不要合入。
 
-## 进度百分比原理
+## 已知限制
 
-端点事件不含任何进度数字，进度为感知估算（`src/lib/progress.ts`）：
-
-1. 主干：时间渐近曲线 `88 × (1 − e^(−t/40))`，渐近不封死，避免"100% 还在等"
-2. 辅助：每个 SSE chunk 到达 +0.4%（封顶 +6%），生成活跃时走得更快
-3. 阶段：下载图片阶段抬到 97%，100% 仅在图片落库后给出；标准端点的局部帧到达时按 `(index+1)/4 × 88` 抬底
-
-## 第三方内容与许可
-
-本项目代码以 [MIT](LICENSE) 许可发布。`src/lib/` 内置的提示词模板、风格库与示例数据整理自多个上游
-开源项目，功能列表中已逐项标注来源（如 [1click-ecom-detailpage](https://github.com/coolqoo/1click-ecom-detailpage)、
-[vane-gpt-image-skills](https://github.com/VaneAi888/vane-gpt-image-skills)、
-[awesome-gpt-image-2](https://github.com/freestylefly/awesome-gpt-image-2) 等）。
-
-这些内容的版权与许可归各上游作者所有，使用与再分发时请遵循对应仓库的许可条款；上游未声明许可的，
-请自行联系作者确认。MIT 许可仅覆盖本仓库自行编写的代码。
+- 没有后端存储，也没有账号同步；数据只存在当前浏览器配置里。
+- relay 只用于本机 dev/preview，不能当作生产转发层。
+- 运行时模板库依赖上游 GitHub / jsDelivr 可用性；首次加载需要联网，之后读本地缓存。
+- 端点必须兼容 OpenAI 的图片生成 / 编辑协议；不同代理的事件格式可能不同。
+- 图片备份是单文件 base64 JSON，超大历史可能超过浏览器内存或存储配额。
+- 漫画工作室的文本能力依赖单独的文本端点，未配置时脚本 / 分镜功能不可用。
 
 ## 贡献
 
-欢迎提交 issue 与 PR，流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。安全问题请不要开公开 issue，
-按 [SECURITY.md](SECURITY.md) 私密报告。
+欢迎 issue 与 PR。流程、代码风格和第三方内容规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。安全问题请不要开公开 issue，按 [SECURITY.md](SECURITY.md) 私密报告。
+
+## 关键词 / Keywords
+
+AI 生图、文生图、图生图、批量生图、提示词模板、本地优先、数据隐私、浏览器端、IndexedDB、BYOK；AI image generation, text-to-image, image-to-image, gpt-image, prompt templates, local-first, privacy-first, browser-only, bring your own key.
 
 ## 许可
 
-[MIT](LICENSE) © 2026 Lemon
+[MIT](LICENSE) © 2026 Lemon。第三方内容许可见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。

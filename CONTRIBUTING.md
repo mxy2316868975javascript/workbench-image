@@ -12,6 +12,8 @@
 ```bash
 npm ci
 npm run dev        # http://localhost:5173
+npm run lint       # ESLint
+npm test           # Vitest 单测
 npm run typecheck  # tsc 类型检查
 npm run build      # 类型检查 + 生产构建
 ```
@@ -43,11 +45,13 @@ scripts/          启动脚本（macOS 的 node 重签名兼容层）
 
 1. 从 `main` 切分支：`git checkout -b feat/简短说明`。
 2. 提交信息建议 `类型: 说明`，类型可用 `feat` / `fix` / `docs` / `refactor` / `chore`。
-3. 提交前本地跑通 `npm run build`。
+3. 提交前本地跑通 `npm run lint && npm test && npm run build`。
 4. 发起 PR，按模板填写改动动机、验证方式与截图（界面改动）。
-5. CI 会执行 `npm ci && npm run build`，通过后合并。
+5. CI 会执行 lint、单测、源码/产物密钥扫描与构建，通过后合并。
 
-## 安全
+## 安全与第三方内容
 
 - 不要提交 `.env.local`、`dist/`、任何真实密钥或带密钥的截图。
 - 发现安全问题请不要开公开 issue，按 [SECURITY.md](SECURITY.md) 私密报告。
+- 新增第三方模板、风格库、提示词或示例数据前，必须确认上游许可与本项目 MIT 分发兼容，并在 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 补充来源、许可和版权行。没有 LICENSE 且 README 未明确授权的内容不要合入。
+- 运行时拉取的数据固定到 commit，不要直接依赖上游 `main` / `master`。
