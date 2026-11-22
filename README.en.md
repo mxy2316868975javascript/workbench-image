@@ -1,10 +1,10 @@
 # Image Workbench
 
-A browser-only AI image workbench: streaming generation, batch queue, local history, prompt templates, and a manga workspace. Images, history, settings, and API keys stay in the local IndexedDB.
+A browser-only AI image workbench for text-to-image, image-to-image, batch generation, prompt templates, and manga storyboards. Images, history, settings, and API keys stay in local IndexedDB; bring your own OpenAI-compatible key (BYOK).
 
 Local demo: run `npm run dev` and open `http://localhost:5173/?demo=1`. After GitHub Pages is enabled, the same demo is available at `https://mxy2316868975javascript.github.io/workbench-image/?demo=1`.
 
-[Quick start](#quick-start) · [Third-party notices](THIRD_PARTY_NOTICES.md)
+[中文](README.md) · [Quick start](#quick-start) · [Third-party notices](THIRD_PARTY_NOTICES.md)
 
 > Independent open-source project. Not affiliated with or endorsed by OpenAI.
 
@@ -50,6 +50,10 @@ npm test
 npm run typecheck
 npm run build
 ```
+
+## Keywords
+
+AI image generation, text-to-image, image-to-image, gpt-image, prompt templates, prompt engineering, local-first, privacy-first, browser-only, bring your own key (BYOK), IndexedDB, manga; AI 生图, 文生图, 图生图, 提示词模板, 本地优先, 数据隐私.
 
 ## License
 

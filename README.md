@@ -1,12 +1,12 @@
-# 生图工作台 · Image Workbench
+# AI 生图工作台 · Image Workbench
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![CI](https://github.com/mxy2316868975javascript/workbench-image/actions/workflows/ci.yml/badge.svg)](https://github.com/mxy2316868975javascript/workbench-image/actions/workflows/ci.yml)
 [![Node](https://img.shields.io/badge/node-%3E%3D20.19-339933?logo=node.js&logoColor=white)](package.json)
 
-纯浏览器端的 AI 生图工作台：流式生成、批量队列、历史管理、提示词模板与漫画工作室。图片、历史、设置和 API Key 只写入本机 IndexedDB，没有后端存储。
+纯浏览器端的 AI 生图工作台：支持文生图、图生图、批量生成、提示词模板与漫画工作室。图片、历史、设置和 API Key 只写入本机 IndexedDB，数据只存本机，自带 API Key（BYOK），没有后端存储。
 
-本地演示：`npm run dev` 后打开 `http://localhost:5173/?demo=1` · [快速开始](#快速开始) · [第三方来源与许可](THIRD_PARTY_NOTICES.md)
+本地演示：`npm run dev` 后打开 `http://localhost:5173/?demo=1` · [English](README.en.md) · [快速开始](#快速开始) · [第三方来源与许可](THIRD_PARTY_NOTICES.md)
 
 > 本项目是独立开源项目，与 OpenAI 无隶属或官方合作关系。
 
@@ -21,6 +21,7 @@
 - [部署](#部署)
 - [第三方来源与许可](#第三方来源与许可)
 - [已知限制](#已知限制)
+- [关键词 / Keywords](#关键词--keywords)
 - [贡献](#贡献)
 - [许可](#许可)
 
@@ -28,9 +29,9 @@
 
 | 深色主题 | 浅色主题 |
 | --- | --- |
-| ![深色主题](docs/screenshots/main-dark.png) | ![浅色主题](docs/screenshots/main-light.png) |
+| ![AI 生图工作台深色主题](docs/screenshots/main-dark.png) | ![AI 生图工作台浅色主题](docs/screenshots/main-light.png) |
 
-![内置模板库](docs/screenshots/templates.png)
+![AI 生图提示词模板库](docs/screenshots/templates.png)
 
 不配置 API Key 也可以打开 `?demo=1` 查看示例任务与图片；演示模式不会调用真实端点。GitHub Pages 部署完成后，同一参数可在 `https://mxy2316868975javascript.github.io/workbench-image/?demo=1` 使用。
 
@@ -178,6 +179,10 @@ GitHub Pages 演示由 `.github/workflows/pages.yml` 构建：设置仓库 Setti
 ## 贡献
 
 欢迎 issue 与 PR。流程、代码风格和第三方内容规则见 [CONTRIBUTING.md](CONTRIBUTING.md)。安全问题请不要开公开 issue，按 [SECURITY.md](SECURITY.md) 私密报告。
+
+## 关键词 / Keywords
+
+AI 生图、文生图、图生图、批量生图、提示词模板、本地优先、数据隐私、浏览器端、IndexedDB、BYOK；AI image generation, text-to-image, image-to-image, gpt-image, prompt templates, local-first, privacy-first, browser-only, bring your own key.
 
 ## 许可
 
